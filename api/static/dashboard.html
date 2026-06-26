@@ -1,0 +1,2744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>array-firewall</title>
+  <style>
+    :root {
+      --bg: #080b10;
+      --surface: #0f141c;
+      --panel: #151c28;
+      --panel-hover: #1a2332;
+      --border: #2a3548;
+      --border-subtle: #1e2836;
+      --text: #e8eef7;
+      --muted: #8fa3bf;
+      --muted-dim: #5c7088;
+      --ok: #3ddc97;
+      --warn: #ffb020;
+      --bad: #ff5c5c;
+      --accent: #4da3ff;
+      --accent-dim: rgba(77,163,255,.12);
+      --radius: 10px;
+      --radius-lg: 14px;
+      --shadow: 0 4px 24px rgba(0,0,0,.35);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Inter", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    /* ── Header ── */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(8,11,16,.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .topbar-inner {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: .85rem 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: .65rem;
+      min-width: 180px;
+    }
+    .brand-mark {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent), #2563eb);
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      font-size: .75rem;
+      color: #fff;
+      letter-spacing: -.02em;
+    }
+    .brand h1 { margin: 0; font-size: 1rem; font-weight: 700; letter-spacing: -.01em; }
+    .brand .sub { color: var(--muted); font-size: .78rem; margin-top: .1rem; }
+    .auth-bar {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .clock { color: var(--muted-dim); font-size: .78rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .last-updated { color: var(--muted-dim); font-size: .72rem; font-variant-numeric: tabular-nums; white-space: nowrap; margin-left: .5rem; opacity: .85; }
+    .last-updated.live { color: var(--ok); opacity: 1; }
+
+    /* ── Tabs ── */
+    .tabs-wrap {
+      border-top: 1px solid var(--border-subtle);
+      background: var(--surface);
+    }
+    .tabs {
+      max-width: 1280px;
+      margin: 0 auto;
+      display: flex;
+      gap: 0;
+      overflow-x: auto;
+      padding: 0 1rem;
+      scrollbar-width: none;
+    }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab {
+      padding: .7rem 1.1rem;
+      border: none;
+      background: none;
+      color: var(--muted);
+      font-size: .85rem;
+      font-weight: 600;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      white-space: nowrap;
+      transition: color .15s, border-color .15s;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    /* ── Layout ── */
+    main {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 1.25rem;
+    }
+    .tab-panel { display: none; animation: fadeIn .2s ease; }
+    .tab-panel.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+    .section {
+      margin-bottom: 1.5rem;
+    }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: .85rem;
+    }
+    .section-head h2 {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: -.01em;
+    }
+    .section-head p {
+      margin: .25rem 0 0;
+      color: var(--muted);
+      font-size: .84rem;
+      max-width: 560px;
+    }
+    .section-actions { display: flex; gap: .45rem; flex-wrap: wrap; align-items: center; }
+
+    /* ── Cards & grids ── */
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.1rem 1.2rem;
+      box-shadow: var(--shadow);
+    }
+    .panel + .panel { margin-top: 1rem; }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: .65rem;
+    }
+    .stat {
+      background: var(--surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius);
+      padding: .85rem .9rem;
+    }
+    .stat label {
+      display: block;
+      font-size: .68rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: var(--muted-dim);
+      margin-bottom: .35rem;
+    }
+    .stat .value {
+      font-size: 1.15rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .stat .value.mono { font-size: .9rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+    @media (min-width: 900px) {
+      .two-col { grid-template-columns: 1fr 1fr; }
+    }
+
+    /* ── Folding savings module ── */
+    .fold-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    @media (min-width: 900px) {
+      .fold-grid { grid-template-columns: 1fr 1fr; }
+    }
+    .fold-block {
+      background: var(--surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius);
+      padding: .85rem .95rem;
+    }
+    .fold-block h3 {
+      margin: 0 0 .65rem;
+      font-size: .78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--muted-dim);
+    }
+    .meter {
+      height: 7px;
+      background: rgba(255,255,255,.06);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: .35rem;
+    }
+    .meter > span {
+      display: block;
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--accent), var(--ok));
+      transition: width .35s ease;
+    }
+    .lane-row {
+      display: grid;
+      grid-template-columns: 72px 1fr auto;
+      gap: .55rem;
+      align-items: center;
+      padding: .35rem 0;
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: .82rem;
+    }
+    .lane-row:last-child { border-bottom: none; }
+    .lane-row .lane-name {
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: .72rem;
+      letter-spacing: .04em;
+      color: var(--muted);
+    }
+    .lane-row .lane-meta {
+      font-size: .72rem;
+      color: var(--muted);
+      text-align: right;
+      white-space: nowrap;
+    }
+    .fold-recent {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .76rem;
+    }
+    .fold-recent th, .fold-recent td {
+      padding: .35rem .4rem;
+      border-bottom: 1px solid var(--border-subtle);
+      text-align: left;
+    }
+    .fold-recent th {
+      font-size: .68rem;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--muted-dim);
+      font-weight: 600;
+    }
+    .fold-recent td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .72rem; }
+
+    /* ── Traffic telemetry ── */
+    .subtabs {
+      display: flex;
+      gap: .35rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+    .subtab {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: .4rem .75rem;
+      font-size: .78rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--muted);
+    }
+    .subtab.active {
+      background: var(--accent-dim);
+      border-color: rgba(77,163,255,.4);
+      color: #b9dcff;
+    }
+    .traffic-panel { display: none; }
+    .traffic-panel.active { display: block; }
+    .flow-card {
+      background: var(--surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius);
+      padding: 1rem;
+    }
+    .flow-card h3 {
+      margin: 0 0 .75rem;
+      font-size: .85rem;
+      font-weight: 700;
+    }
+    .flow-rate {
+      font-size: 1.65rem;
+      font-weight: 800;
+      line-height: 1.1;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .flow-meta {
+      margin-top: .45rem;
+      font-size: .76rem;
+      color: var(--muted);
+    }
+    .util-bar {
+      height: 10px;
+      background: rgba(255,255,255,.06);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: .55rem;
+    }
+    .util-bar > span {
+      display: block;
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #4da3ff, #3ddc97);
+    }
+    .util-bar.egress > span { background: linear-gradient(90deg, #ffb020, #ff5c5c); }
+    .grade {
+      display: inline-block;
+      padding: .15rem .5rem;
+      border-radius: 6px;
+      font-size: .72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .grade.excellent { background: rgba(61,220,151,.14); color: var(--ok); }
+    .grade.good { background: rgba(77,163,255,.14); color: #7eb8ff; }
+    .grade.fair { background: rgba(255,176,32,.14); color: var(--warn); }
+    .grade.poor { background: rgba(255,92,92,.14); color: var(--bad); }
+    .grade.unknown { background: rgba(255,255,255,.06); color: var(--muted); }
+
+    /* ── Traffic histograms ── */
+    .hist-block { margin-top: 1rem; }
+    .hist-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: .75rem;
+      flex-wrap: wrap;
+      margin-bottom: .55rem;
+    }
+    .hist-head h3 { margin: 0; font-size: .85rem; font-weight: 700; }
+    .hist-stats {
+      display: flex;
+      gap: .75rem;
+      flex-wrap: wrap;
+      font-size: .72rem;
+      color: var(--muted);
+      margin-bottom: .5rem;
+    }
+    .hist-stats span strong { color: var(--text); font-weight: 700; }
+    .hist-stats .peak strong { color: var(--ok); }
+    .hist-stats .low strong { color: #7eb8ff; }
+    .hist-wrap {
+      display: flex;
+      align-items: flex-end;
+      gap: 2px;
+      height: 72px;
+      padding: .35rem .25rem 0;
+      background: rgba(0,0,0,.15);
+      border-radius: 8px;
+      border: 1px solid var(--border-subtle);
+    }
+    .hist-bar {
+      flex: 1;
+      min-width: 4px;
+      border-radius: 3px 3px 0 0;
+      background: linear-gradient(180deg, #4da3ff, rgba(77,163,255,.35));
+      transition: height .25s ease;
+      position: relative;
+    }
+    .hist-bar.egress { background: linear-gradient(180deg, #ffb020, rgba(255,176,32,.35)); }
+    .hist-bar:hover::after {
+      content: attr(title);
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      white-space: nowrap;
+      font-size: .65rem;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: .15rem .35rem;
+      border-radius: 4px;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .hist-axis {
+      display: flex;
+      justify-content: space-between;
+      font-size: .65rem;
+      color: var(--muted-dim);
+      margin-top: .35rem;
+    }
+    #telDeviceRows tr[data-ip] { cursor: pointer; }
+    #telDeviceRows tr[data-ip]:hover td { background: rgba(77,163,255,.05); }
+    #telDeviceRows tr.selected td { background: rgba(77,163,255,.1); }
+
+    /* ── Badges & buttons ── */
+    .badge {
+      display: inline-block;
+      padding: .2rem .55rem;
+      border-radius: 6px;
+      font-size: .72rem;
+      font-weight: 600;
+      letter-spacing: .02em;
+    }
+    .badge.ok { background: rgba(61,220,151,.14); color: var(--ok); }
+    .badge.bad { background: rgba(255,92,92,.14); color: var(--bad); }
+    .badge.warn { background: rgba(255,176,32,.14); color: var(--warn); }
+
+    button, .btn {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: .45rem .8rem;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: .82rem;
+      transition: background .12s, border-color .12s;
+    }
+    button:hover { background: var(--panel-hover); }
+    button.primary {
+      background: var(--accent-dim);
+      border-color: rgba(77,163,255,.4);
+      color: #b9dcff;
+    }
+    button.primary:hover { background: rgba(77,163,255,.22); }
+    button.danger {
+      background: rgba(255,92,92,.1);
+      border-color: rgba(255,92,92,.35);
+      color: #ffb4b4;
+    }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+    button.sm { padding: .3rem .55rem; font-size: .75rem; }
+
+    .toolbar {
+      display: flex;
+      gap: .45rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .toolbar-divider {
+      width: 1px;
+      height: 24px;
+      background: var(--border);
+      margin: 0 .25rem;
+    }
+
+    /* ── Forms & tables ── */
+    input[type=password], input[type=text], input[type=number], select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: .45rem .65rem;
+      font-size: .85rem;
+      min-width: 120px;
+    }
+    input[type=text] { min-width: 200px; }
+    input:focus, select:focus { outline: 2px solid rgba(77,163,255,.35); outline-offset: 1px; }
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: .75rem;
+      align-items: end;
+    }
+    .form-grid label {
+      display: flex;
+      flex-direction: column;
+      gap: .3rem;
+      font-size: .72rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .form-grid label.inline {
+      flex-direction: row;
+      align-items: center;
+      text-transform: none;
+      font-size: .88rem;
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border-subtle); }
+    table { width: 100%; border-collapse: collapse; font-size: .86rem; }
+    th, td { padding: .6rem .75rem; text-align: left; vertical-align: middle; border-bottom: 1px solid var(--border-subtle); }
+    th {
+      background: var(--surface);
+      color: var(--muted);
+      font-size: .68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      white-space: nowrap;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(77,163,255,.03); }
+    th.sortable { cursor: pointer; user-select: none; }
+    th.sortable:hover { color: var(--text); }
+
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .82rem; }
+    .sub { color: var(--muted); font-size: .84rem; }
+    .err {
+      color: var(--bad);
+      background: rgba(255,92,92,.08);
+      border: 1px solid rgba(255,92,92,.25);
+      border-radius: var(--radius);
+      padding: .6rem .85rem;
+      margin-bottom: 1rem;
+      font-size: .88rem;
+    }
+    .hint-box {
+      background: var(--surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius);
+      padding: .85rem 1rem;
+      font-size: .82rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .hint-box .mono { color: var(--text); font-size: .78rem; }
+
+    /* ── Group modal ── */
+    .group-link {
+      color: var(--accent);
+      cursor: pointer;
+      text-decoration: none;
+      border-bottom: 1px dashed rgba(77,163,255,.35);
+    }
+    .group-link:hover { color: #b9dcff; }
+    tr.group-row { cursor: pointer; }
+    tr.group-row.selected td { background: rgba(77,163,255,.08); }
+
+    .modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.6);
+      display: none; align-items: center; justify-content: center;
+      padding: 1rem; padding-top: 4rem; z-index: 2000;
+    }
+    .modal-backdrop.is-open { display: flex; }
+    .modal-backdrop[hidden] { display: none !important; }
+    .modal {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      width: min(920px, 100%);
+      max-height: min(88vh, 900px);
+      overflow: auto;
+      box-shadow: 0 24px 80px rgba(0,0,0,.55);
+    }
+    .modal-head {
+      display: flex; justify-content: space-between; align-items: start; gap: 1rem;
+      padding: 1rem 1.2rem; border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; background: var(--panel); z-index: 2;
+    }
+    .modal-body { padding: 1rem 1.2rem 1.25rem; }
+    .policy-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: .6rem;
+      margin-bottom: 1rem;
+    }
+    .policy-card {
+      background: var(--surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius);
+      padding: .75rem;
+    }
+    .policy-card h3 {
+      margin: 0 0 .3rem;
+      font-size: .68rem;
+      color: var(--muted-dim);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+    .policy-card .value { font-weight: 700; margin-bottom: .2rem; font-size: .92rem; }
+    .policy-card .detail { color: var(--muted); font-size: .78rem; line-height: 1.35; }
+    .tier-high { color: var(--ok); }
+    .tier-medium { color: var(--warn); }
+    .tier-low { color: var(--muted); }
+
+    footer {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 1rem 1.25rem 2rem;
+      color: var(--muted-dim);
+      font-size: .75rem;
+      border-top: 1px solid var(--border-subtle);
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="brand-mark">AF</div>
+        <div>
+          <h1>array-firewall</h1>
+          <div class="sub" id="roleLabel">network exit</div>
+        </div>
+      </div>
+      <div class="auth-bar">
+        <input type="password" id="token" placeholder="API token" style="min-width:160px" />
+        <button class="primary" id="saveToken">Connect</button>
+        <button id="refresh">Refresh</button>
+        <span class="toolbar-divider"></span>
+        <button id="discover">Scan</button>
+        <button id="reloadRules">Reload rules</button>
+        <span class="clock" id="clock"></span>
+        <span class="last-updated" id="lastUpdated" title="Last dashboard refresh"></span>
+      </div>
+    </div>
+    <nav class="tabs-wrap">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="overview" role="tab" aria-selected="true">Overview</button>
+        <button class="tab" data-tab="devices" role="tab">Devices</button>
+        <button class="tab" data-tab="groups" role="tab">Groups</button>
+        <button class="tab" data-tab="network" role="tab">Network</button>
+        <button class="tab" data-tab="traffic" role="tab">Traffic</button>
+        <button class="tab" data-tab="security" role="tab">Security</button>
+        <button class="tab" data-tab="gaming" role="tab">Gaming &amp; Performance</button>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <div class="err" id="error" hidden></div>
+
+    <!-- ═══ OVERVIEW ═══ -->
+    <div class="tab-panel active" id="panel-overview" role="tabpanel">
+      <section class="section">
+        <div class="section-head">
+          <div>
+            <h2>Gateway status</h2>
+            <p>Default-deny firewall with MAC allowlist, NAT, and device quarantine until approved.</p>
+          </div>
+          <div class="section-actions">
+            <button id="shieldOn">Enable shield</button>
+            <button id="shieldOff">Relax shield</button>
+            <button id="prepareGateway">Stage gateway</button>
+          </div>
+        </div>
+        <div class="stat-grid">
+          <div class="stat"><label>Mode</label><div class="value" id="modeState">—</div></div>
+          <div class="stat"><label>Policy</label><div class="value" id="policy">—</div></div>
+          <div class="stat"><label>Allowed devices</label><div class="value" id="allowedCount">—</div></div>
+          <div class="stat"><label>NAT</label><div class="value" id="natState">—</div></div>
+          <div class="stat"><label>DHCP</label><div class="value" id="dhcpState">—</div></div>
+          <div class="stat"><label>Packet shield</label><div class="value" id="shieldState">—</div></div>
+        </div>
+      </section>
+
+      <div class="two-col">
+        <section class="section panel" id="sentinelCard">
+          <div class="section-head">
+            <div>
+              <h2>Warzone Sentinel</h2>
+              <p>Lobby integrity · co-hosted on <span class="mono">:8098</span></p>
+            </div>
+            <div class="section-actions">
+              <button class="sm" id="sentinelOpen">Open dashboard</button>
+              <button class="sm" id="sentinelSync">Sync config</button>
+            </div>
+          </div>
+          <div class="stat-grid">
+            <div class="stat"><label>Status</label><div class="value" id="sentSentinelStatus">—</div></div>
+            <div class="stat"><label>Verdict</label><div class="value" id="sentVerdict">—</div></div>
+            <div class="stat"><label>Phase</label><div class="value" id="sentPhase">—</div></div>
+            <div class="stat"><label>Connections</label><div class="value" id="sentConns">—</div></div>
+            <div class="stat"><label>Network guard</label><div class="value" id="sentGuard">—</div></div>
+            <div class="stat"><label>Polls · Xbox</label><div class="value mono" id="sentPollsXbox">—</div></div>
+          </div>
+        </section>
+
+        <section class="section panel" id="perfCard">
+          <div class="section-head">
+            <div>
+              <h2>Performance</h2>
+              <p>BBR · CAKE QoS · DSCP · GPU analysis on <span class="mono">.221</span></p>
+            </div>
+            <div class="section-actions">
+              <button class="primary sm" id="perfApply">Apply stack</button>
+              <button class="sm" id="perfRefresh">Refresh</button>
+            </div>
+          </div>
+          <div class="stat-grid">
+            <div class="stat"><label>TCP CC</label><div class="value mono" id="perfCc">—</div></div>
+            <div class="stat"><label>Buffer</label><div class="value" id="perfBuffer">—</div></div>
+            <div class="stat"><label>DSCP</label><div class="value" id="perfDscp">—</div></div>
+            <div class="stat"><label>GPU</label><div class="value" id="perfGpu">—</div></div>
+            <div class="stat"><label>QoS up</label><div class="value mono" id="perfQosUp" style="font-size:.78rem">—</div></div>
+            <div class="stat"><label>QoS down</label><div class="value mono" id="perfQosDown" style="font-size:.78rem">—</div></div>
+          </div>
+        </section>
+      </div>
+
+      <section class="section panel" id="stabilityCard">
+        <div class="section-head">
+          <div>
+            <h2>Link stability</h2>
+            <p>CAKE autorate · latency · shaping health</p>
+          </div>
+          <div class="section-actions">
+            <button class="primary sm" id="stabilityApply">Apply full stack</button>
+          </div>
+        </div>
+        <div class="stat-grid" style="margin-bottom:.75rem">
+          <div class="stat"><label>WAN latency</label><div class="value" id="stabLatency">—</div></div>
+          <div class="stat"><label>Shaping</label><div class="value" id="stabShaping">—</div></div>
+          <div class="stat"><label>Last autorate</label><div class="value mono" id="stabAutorate" style="font-size:.78rem">—</div></div>
+        </div>
+        <div class="hint-box" id="stabRecommend">Connect and refresh to see recommendations.</div>
+      </section>
+
+      <section class="section panel" id="wanTelemetryOverview">
+        <div class="section-head">
+          <div>
+            <h2>WAN traffic</h2>
+            <p>Live ingress / egress on the gateway WAN interface</p>
+          </div>
+        </div>
+        <div class="stat-grid">
+          <div class="stat"><label>Ingress (download)</label><div class="value mono" id="telOvIngress">—</div></div>
+          <div class="stat"><label>Egress (upload)</label><div class="value mono" id="telOvEgress">—</div></div>
+          <div class="stat"><label>Latency</label><div class="value" id="telOvLatency">—</div></div>
+          <div class="stat"><label>Queue health</label><div class="value" id="telOvQueue">—</div></div>
+        </div>
+      </section>
+
+      <section class="section panel" id="foldSavingsOverview">
+        <div class="section-head">
+          <div>
+            <h2>Folding savings</h2>
+            <p>Cumulative compression · container headroom</p>
+          </div>
+        </div>
+        <div class="stat-grid">
+          <div class="stat"><label>Bytes saved</label><div class="value mono" id="foldOvSaved">—</div></div>
+          <div class="stat"><label>Avg ratio</label><div class="value" id="foldOvRatio">—</div></div>
+          <div class="stat"><label>Cache hits</label><div class="value" id="foldOvCache">—</div></div>
+          <div class="stat"><label>RAM headroom</label><div class="value" id="foldOvHeadroom">—</div></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ═══ DEVICES ═══ -->
+    <div class="tab-panel" id="panel-devices" role="tabpanel">
+      <section class="section panel">
+        <div class="section-head">
+          <div>
+            <h2>Devices on LAN</h2>
+            <p>New devices are quarantined (no internet) until you approve them or add them to an allowed group.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="devices-table">
+            <thead>
+              <tr>
+                <th class="sortable" data-sort="name" data-label="Device">Device</th>
+                <th>MAC</th>
+                <th class="sortable" data-sort="ip" data-label="IP">IP</th>
+                <th>Allocate</th>
+                <th>Reserve</th>
+                <th class="sortable" data-sort="group" data-label="Groups">Groups</th>
+                <th>Internet</th>
+                <th>Last seen</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="devices"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- ═══ GROUPS ═══ -->
+    <div class="tab-panel" id="panel-groups" role="tabpanel">
+      <section class="section panel">
+        <div class="section-head">
+          <div>
+            <h2>Create group</h2>
+            <p>Apply shared internet, QoS, DNS, and shield policy to all members.</p>
+          </div>
+        </div>
+        <div class="form-grid" style="margin-bottom:1rem">
+          <label>Group ID<input type="text" id="grpId" placeholder="infrastructure" /></label>
+          <label>Name<input type="text" id="grpName" placeholder="Infrastructure" /></label>
+          <label>Internet<select id="grpInternet"><option value="allowed">allowed</option><option value="denied">denied</option></select></label>
+          <label>QoS<select id="grpQos"><option value="high">high</option><option value="balanced">balanced</option><option value="low">low</option><option value="gaming">gaming</option></select></label>
+          <label>Shield<select id="grpShield"><option value="off">off</option><option value="normal">normal</option></select></label>
+          <label>DNS<select id="grpDns"><option value="off">off</option><option value="strict">strict</option></select></label>
+          <label style="justify-content:flex-end">
+            <span style="visibility:hidden">.</span>
+            <div class="toolbar">
+              <button class="primary" id="grpCreate">Create</button>
+              <button id="grpApplyAll">Apply all</button>
+            </div>
+          </label>
+        </div>
+      </section>
+
+      <section class="section panel">
+        <div class="section-head">
+          <div><h2>Existing groups</h2><p>Click a row to view members and applied policy.</p></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Group</th><th>Members</th><th>Config</th><th></th></tr></thead>
+            <tbody id="groups"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- ═══ NETWORK ═══ -->
+    <div class="tab-panel" id="panel-network" role="tabpanel">
+      <section class="section panel">
+        <div class="section-head">
+          <div>
+            <h2>CAKE bandwidth (SQM)</h2>
+            <p>Set shaping rates to ~95% of measured ISP speed to prevent bufferbloat and jitter.</p>
+          </div>
+          <div class="section-actions">
+            <button class="primary" id="qosAutorate">Measure &amp; autorate</button>
+            <button id="qosSaveBw">Save rates</button>
+          </div>
+        </div>
+        <div class="form-grid" style="margin-bottom:1rem">
+          <label>Upload<input type="text" id="wanUp" placeholder="950mbit" /></label>
+          <label>Download<input type="text" id="wanDown" placeholder="950mbit" /></label>
+          <label>Shaping factor<input type="text" id="autorateFactor" value="0.95" /></label>
+        </div>
+        <div class="stat-grid" style="margin-bottom:1rem">
+          <div class="stat"><label>Measured up</label><div class="value mono" id="measUp" style="font-size:.85rem">—</div></div>
+          <div class="stat"><label>Measured down</label><div class="value mono" id="measDown" style="font-size:.85rem">—</div></div>
+          <div class="stat"><label>Queue drops</label><div class="value" id="qosDrops">—</div></div>
+          <div class="stat"><label>Overlimits</label><div class="value" id="qosOverlimits">—</div></div>
+        </div>
+        <div class="hint-box" id="qosHint">Contract: 1 Gbps sync — CAKE shaped at 95% (950 Mbps). Use <strong>Measure &amp; autorate</strong> only if you need to re-apply contract rates.</div>
+      </section>
+
+      <section class="section panel">
+        <div class="section-head">
+          <div>
+            <h2>DMZ &amp; inbound NAT</h2>
+            <p>Expose a host to the upstream router (full WAN passthrough). Xbox defaults to <span class="mono">192.168.167.65</span>.</p>
+          </div>
+          <div class="section-actions">
+            <button class="primary" id="natXboxDmz">Xbox DMZ</button>
+            <button id="natXboxPreset">Xbox port preset</button>
+            <button id="natReload">Reload NAT</button>
+          </div>
+        </div>
+        <div class="form-grid" style="margin-bottom:1rem">
+          <label class="inline"><input type="checkbox" id="dmzEnabled" /> DMZ enabled</label>
+          <label>DMZ host IP<input type="text" id="dmzHostIp" placeholder="192.168.167.65" /></label>
+          <label>Label<input type="text" id="dmzName" placeholder="xbox" /></label>
+          <label style="justify-content:flex-end">
+            <span style="visibility:hidden">.</span>
+            <button class="primary" id="dmzSave">Save DMZ</button>
+          </label>
+        </div>
+        <div class="hint-box warn" id="dmzWarn" style="margin-bottom:1rem;display:none">DMZ forwards all unsolicited WAN traffic to the host below — use only for trusted gaming endpoints.</div>
+        <div class="stat-grid" style="margin-bottom:1.25rem">
+          <div class="stat"><label>DMZ</label><div class="value" id="dmzState">—</div></div>
+          <div class="stat"><label>Port forwards</label><div class="value" id="pfCount">—</div></div>
+          <div class="stat"><label>UPnP</label><div class="value" id="upnpState">—</div></div>
+          <div class="stat"><label>UPnP leases</label><div class="value" id="upnpLeaseCount">—</div></div>
+        </div>
+
+        <h3 class="sub" style="margin:0 0 .5rem;font-weight:600;color:var(--text)">UPnP / NAT-PMP</h3>
+        <div class="form-grid" style="margin-bottom:.75rem">
+          <label class="inline"><input type="checkbox" id="upnpEnabled" checked /> UPnP enabled for LAN devices</label>
+          <label class="inline"><input type="checkbox" id="upnpSecure" /> Secure mode (LAN-only mappings)</label>
+          <label style="justify-content:flex-end">
+            <span style="visibility:hidden">.</span>
+            <button class="primary" id="upnpSave">Save UPnP</button>
+          </label>
+        </div>
+        <div class="table-wrap" style="margin-bottom:1.25rem">
+          <table>
+            <thead><tr><th>Description</th><th>Proto</th><th>Ext port</th><th>Int host</th><th>Int port</th><th>Source</th></tr></thead>
+            <tbody id="upnpLeases"></tbody>
+          </table>
+        </div>
+
+        <h3 class="sub" style="margin:0 0 .5rem;font-weight:600;color:var(--text)">Port forwarding</h3>
+        <div class="form-grid" style="margin-bottom:.75rem">
+          <label>Name<input type="text" id="pfName" placeholder="minecraft" /></label>
+          <label>Proto<select id="pfProto"><option value="tcp">tcp</option><option value="udp">udp</option><option value="both">both</option></select></label>
+          <label>WAN port<input type="number" id="pfWan" min="1" max="65535" placeholder="25565" /></label>
+          <label>LAN IP<input type="text" id="pfLanIp" placeholder="192.168.167.65" /></label>
+          <label>LAN port<input type="number" id="pfLan" min="1" max="65535" placeholder="25565" /></label>
+          <label style="justify-content:flex-end">
+            <span style="visibility:hidden">.</span>
+            <button class="primary" id="pfAdd">Add forward</button>
+          </label>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Name</th><th>Proto</th><th>WAN</th><th>LAN</th><th>Source</th><th></th></tr></thead>
+            <tbody id="pfTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section panel">
+        <div class="section-head">
+          <div>
+            <h2>Gateway cutover</h2>
+            <p>Replace Firewalla as network exit. Run preflight before live cutover.</p>
+          </div>
+          <div class="section-actions">
+            <button id="cutoverPreflight">Preflight</button>
+            <button id="cutoverBackup">Backup</button>
+            <button class="primary" id="cutoverPrepare">Stage gateway</button>
+          </div>
+        </div>
+        <div id="cutoverChecks" class="hint-box" style="margin-bottom:1rem">Run preflight to check readiness.</div>
+        <div class="hint-box">
+          Live cutover (brief outage):<br>
+          <span class="mono">cd /root/deploy/array-firewall && FORCE_CUTOVER=1 ./scripts/cutover-gateway.sh</span><br>
+          Rollback: <span class="mono">./scripts/cutover-rollback.sh</span>
+        </div>
+      </section>
+
+      <section class="section panel">
+        <div class="section-head">
+          <div>
+            <h2>DHCP server</h2>
+            <p>dnsmasq pool, DNS options, and static reservations.</p>
+          </div>
+          <div class="section-actions">
+            <button class="primary" id="dhcpSave">Save config</button>
+            <button id="dhcpRestart">Restart dnsmasq</button>
+          </div>
+        </div>
+        <div class="form-grid" style="margin-bottom:1.25rem">
+          <label class="inline"><input type="checkbox" id="dhcpEnabled" checked /> Enabled</label>
+          <label>Interface<input type="text" id="dhcpIf" value="eth1" /></label>
+          <label>Range start<input type="text" id="dhcpStart" value="10.99.0.50" /></label>
+          <label>Range end<input type="text" id="dhcpEnd" value="10.99.0.200" /></label>
+          <label>Lease<input type="text" id="dhcpLease" value="12h" /></label>
+          <label>Gateway<input type="text" id="dhcpGw" value="10.99.0.1" /></label>
+          <label>DNS<input type="text" id="dhcpDns" value="10.99.0.1" /></label>
+          <label>Upstream<input type="text" id="dhcpUpstream" value="192.168.167.1" /></label>
+          <label>Domain<input type="text" id="dhcpDomain" value="array-firewall.local" /></label>
+        </div>
+
+        <h3 class="sub" style="margin:0 0 .5rem;font-weight:600;color:var(--text)">Active leases</h3>
+        <div class="table-wrap" style="margin-bottom:1.25rem">
+          <table>
+            <thead><tr><th>Hostname</th><th>MAC</th><th>IP</th><th>Expires</th><th>Static</th></tr></thead>
+            <tbody id="dhcpLeases"></tbody>
+          </table>
+        </div>
+
+        <h3 class="sub" style="margin:0 0 .5rem;font-weight:600;color:var(--text)">Static reservations</h3>
+        <div class="form-grid" style="margin-bottom:.75rem">
+          <label>MAC<input type="text" id="resMac" placeholder="aa:bb:cc:dd:ee:ff" /></label>
+          <label>IP<input type="text" id="resIp" placeholder="10.99.0.65" /></label>
+          <label>Hostname<input type="text" id="resHost" placeholder="optional" /></label>
+          <label style="justify-content:flex-end">
+            <span style="visibility:hidden">.</span>
+            <button class="primary" id="resAdd">Add reservation</button>
+          </label>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Hostname</th><th>MAC</th><th>IP</th><th></th></tr></thead>
+            <tbody id="dhcpReservations"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- ═══ TRAFFIC ═══ -->
+    <div class="tab-panel" id="panel-traffic" role="tabpanel">
+      <section class="section panel">
+        <div class="section-head">
+          <div>
+            <h2>Traffic telemetry</h2>
+            <p>WAN ingress/egress rates, per-device counters, and queue buffer health.</p>
+          </div>
+          <div class="section-actions">
+            <button class="primary sm" id="telRefresh">Refresh now</button>
+          </div>
+        </div>
+        <div class="subtabs" role="tablist" id="trafficSubtabs">
+          <button class="subtab active" data-traffic="wan" type="button">WAN ingress / egress</button>
+          <button class="subtab" data-traffic="devices" type="button">Devices</button>
+          <button class="subtab" data-traffic="queues" type="button">Queues &amp; bufferbloat</button>
+        </div>
+
+        <div class="traffic-panel active" id="traffic-wan">
+          <div class="two-col" style="margin-bottom:1rem">
+            <div class="flow-card">
+              <h3>Ingress · download</h3>
+              <div class="flow-rate" id="telIngressRate">—</div>
+              <div class="flow-meta" id="telIngressMeta">—</div>
+              <div class="util-bar"><span id="telIngressUtil" style="width:0%"></span></div>
+            </div>
+            <div class="flow-card">
+              <h3>Egress · upload</h3>
+              <div class="flow-rate" id="telEgressRate">—</div>
+              <div class="flow-meta" id="telEgressMeta">—</div>
+              <div class="util-bar egress"><span id="telEgressUtil" style="width:0%"></span></div>
+            </div>
+          </div>
+          <div class="stat-grid" style="margin-bottom:1rem">
+            <div class="stat"><label>Shaped down</label><div class="value mono" id="telShapedDown">—</div></div>
+            <div class="stat"><label>Shaped up</label><div class="value mono" id="telShapedUp">—</div></div>
+            <div class="stat"><label>Latency</label><div class="value" id="telLatency">—</div></div>
+            <div class="stat"><label>Packet loss</label><div class="value" id="telLoss">—</div></div>
+            <div class="stat"><label>Queue drops</label><div class="value" id="telQdrops">—</div></div>
+            <div class="stat"><label>Overlimits</label><div class="value" id="telOverlimits">—</div></div>
+          </div>
+          <div class="hint-box" id="telWanHint">Rates computed from consecutive polls. First refresh shows totals only.</div>
+
+          <div class="hist-block fold-block">
+            <div class="hist-head">
+              <h3>Download rate histogram</h3>
+              <span class="sub" id="telHistWindow">—</span>
+            </div>
+            <div class="hist-stats" id="telHistIngressStats"></div>
+            <div class="hist-wrap" id="telHistIngress" aria-label="Ingress rate histogram"></div>
+            <div class="hist-axis"><span id="telHistIngressLo">low</span><span>peak →</span></div>
+          </div>
+          <div class="hist-block fold-block">
+            <div class="hist-head">
+              <h3>Upload rate histogram</h3>
+            </div>
+            <div class="hist-stats" id="telHistEgressStats"></div>
+            <div class="hist-wrap hist-egress" id="telHistEgress" aria-label="Egress rate histogram"></div>
+            <div class="hist-axis"><span id="telHistEgressLo">low</span><span>peak →</span></div>
+          </div>
+        </div>
+
+        <div class="traffic-panel" id="traffic-devices">
+          <div class="hist-block fold-block" style="margin-bottom:1rem">
+            <div class="hist-head">
+              <h3 id="telDevHistTitle">Select a device</h3>
+              <span class="sub" id="telDevHistWindow">—</span>
+            </div>
+            <p class="sub" id="telDevHistSub" style="margin:0 0 .65rem;font-size:.78rem">Click a row below to view peak / low download and upload rates.</p>
+            <div class="two-col" style="gap:.75rem">
+              <div>
+                <div class="sub" style="font-size:.72rem;font-weight:600;margin-bottom:.35rem;color:var(--muted)">Download ↓</div>
+                <div class="hist-stats" id="telDevHistDownStats"></div>
+                <div class="hist-wrap" id="telDevHistDown"></div>
+                <div class="hist-axis"><span id="telDevHistDownLo">low</span><span>peak →</span></div>
+              </div>
+              <div>
+                <div class="sub" style="font-size:.72rem;font-weight:600;margin-bottom:.35rem;color:var(--muted)">Upload ↑</div>
+                <div class="hist-stats" id="telDevHistUpStats"></div>
+                <div class="hist-wrap" id="telDevHistUp"></div>
+                <div class="hist-axis"><span id="telDevHistUpLo">low</span><span>peak →</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table id="tel-devices-table">
+              <thead>
+                <tr>
+                  <th class="sortable" data-sort="name" data-label="Device">Device</th>
+                  <th class="sortable" data-sort="ip" data-label="IP">IP</th>
+                  <th class="sortable" data-sort="qos" data-label="QoS">QoS</th>
+                  <th class="sortable" data-sort="down" data-label="↓ Down">↓ Down</th>
+                  <th class="sortable" data-sort="up" data-label="↑ Up">↑ Up</th>
+                  <th class="sortable" data-sort="total_down" data-label="Total ↓">Total ↓</th>
+                  <th class="sortable" data-sort="total_up" data-label="Total ↑">Total ↑</th>
+                  <th class="sortable" data-sort="conns" data-label="Conns">Conns</th>
+                </tr>
+              </thead>
+              <tbody id="telDeviceRows">
+                <tr><td colspan="8" class="sub">Connect and open Traffic tab to load device counters.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="hint-box" id="telDevHint" style="margin-top:.75rem">Click a device to view its histogram · rates update each refresh (~15s).</div>
+        </div>
+
+        <div class="traffic-panel" id="traffic-queues">
+          <div class="two-col" style="margin-bottom:1rem">
+            <div class="flow-card">
+              <h3>Download queue · ifb0</h3>
+              <div id="telQDownGrade">—</div>
+              <div class="flow-meta mono" id="telQDownSummary" style="margin-top:.5rem">—</div>
+              <div class="stat-grid" style="margin-top:.75rem">
+                <div class="stat"><label>Backlog</label><div class="value mono" id="telQDownBacklog">—</div></div>
+                <div class="stat"><label>Dropped</label><div class="value" id="telQDownDropped">—</div></div>
+                <div class="stat"><label>Overlimits Δ</label><div class="value mono" id="telQDownOver">—</div></div>
+              </div>
+            </div>
+            <div class="flow-card">
+              <h3>Upload queue · WAN</h3>
+              <div id="telQUpGrade">—</div>
+              <div class="flow-meta mono" id="telQUpSummary" style="margin-top:.5rem">—</div>
+              <div class="stat-grid" style="margin-top:.75rem">
+                <div class="stat"><label>Backlog</label><div class="value mono" id="telQUpBacklog">—</div></div>
+                <div class="stat"><label>Dropped</label><div class="value" id="telQUpDropped">—</div></div>
+                <div class="stat"><label>Overlimits Δ</label><div class="value mono" id="telQUpOver">—</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="hint-box" id="telQueueHint">Grades use backlog + overlimits since last refresh (not lifetime totals). First refresh shows unknown until the next poll.</div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ═══ SECURITY / IDS ═══ -->
+    <div class="tab-panel" id="panel-security" role="tabpanel">
+      <section class="section panel">
+        <div class="section-head">
+          <div>
+            <h2>AI intrusion detection</h2>
+            <p>NIST-aligned monitoring · log-only mode · AI traffic priority management</p>
+          </div>
+          <div class="section-actions">
+            <button class="primary sm" id="idsScan">Scan now</button>
+            <button class="sm" id="idsApplyQos">Apply priority QoS</button>
+          </div>
+        </div>
+        <div class="stat-grid" style="margin-bottom:1rem">
+          <div class="stat"><label>Mode</label><div class="value" id="idsMode">—</div></div>
+          <div class="stat"><label>Last scan</label><div class="value mono" id="idsLastScan">—</div></div>
+          <div class="stat"><label>Flows</label><div class="value" id="idsFlowCount">—</div></div>
+          <div class="stat"><label>Events</label><div class="value" id="idsEventTotal">—</div></div>
+          <div class="stat"><label>High</label><div class="value" id="idsHighCount">—</div></div>
+          <div class="stat"><label>AI verdict</label><div class="value" id="idsAiVerdict">—</div></div>
+        </div>
+        <div class="hint-box" id="idsAiSummary">AI assessment appears after the next scan.</div>
+      </section>
+
+      <div class="two-col">
+        <section class="section panel">
+          <div class="section-head"><div><h2>Highlights</h2><p>Suspicious activity (logged, not blocked)</p></div></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>When</th><th>Severity</th><th>Event</th><th>Device</th><th>NIST</th></tr></thead>
+              <tbody id="idsHighlightRows">
+                <tr><td colspan="5" class="sub">Run a scan to populate IDS highlights.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section panel">
+          <div class="section-head"><div><h2>Traffic priority</h2><p>AI-managed device classes</p></div></div>
+          <ol id="idsPriorityStack" style="margin:0 0 1rem 1.1rem;line-height:1.8;color:var(--muted)">
+            <li>Xbox / gaming</li><li>Wireless infrastructure</li><li>Laptops</li><li>Phones</li><li>Everything else</li>
+          </ol>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Priority</th><th>Device</th><th>IP</th><th>Count</th></tr></thead>
+              <tbody id="idsPriorityRows">
+                <tr><td colspan="4" class="sub">Loading priority map…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <section class="section panel" style="margin-top:1rem">
+        <div class="section-head"><div><h2>NIST detection catalog</h2><p>Controls used to classify suspicious traffic</p></div></div>
+        <div id="idsNistRules" class="policy-grid"></div>
+      </section>
+    </div>
+
+    <!-- ═══ GAMING & PERFORMANCE ═══ -->
+    <div class="tab-panel" id="panel-gaming" role="tabpanel">
+      <div class="two-col">
+        <section class="section panel">
+          <div class="section-head">
+            <div><h2>Sentinel controls</h2><p>Warzone lobby monitoring and network guard.</p></div>
+          </div>
+          <div class="stat-grid" style="margin-bottom:1rem">
+            <div class="stat"><label>Status</label><div class="value" id="sentSentinelStatusG">—</div></div>
+            <div class="stat"><label>Verdict</label><div class="value" id="sentVerdictG">—</div></div>
+            <div class="stat"><label>Phase</label><div class="value" id="sentPhaseG">—</div></div>
+            <div class="stat"><label>Connections</label><div class="value" id="sentConnsG">—</div></div>
+          </div>
+          <div class="toolbar">
+            <button class="primary" id="sentinelOpenG">Open sentinel dashboard</button>
+            <button id="sentinelSyncG">Sync config</button>
+            <span class="toolbar-divider"></span>
+            <button id="shieldOnG">Enable shield</button>
+            <button id="shieldOffG">Relax shield</button>
+          </div>
+        </section>
+
+        <section class="section panel">
+          <div class="section-head">
+            <div><h2>Performance stack</h2><p>Kernel tuning, CAKE QoS, DSCP, GPU analysis.</p></div>
+          </div>
+          <div class="stat-grid" style="margin-bottom:1rem">
+            <div class="stat"><label>TCP CC</label><div class="value mono" id="perfCcG">—</div></div>
+            <div class="stat"><label>Buffer</label><div class="value" id="perfBufferG">—</div></div>
+            <div class="stat"><label>DSCP</label><div class="value" id="perfDscpG">—</div></div>
+            <div class="stat"><label>GPU</label><div class="value" id="perfGpuG">—</div></div>
+          </div>
+          <div class="toolbar">
+            <button class="primary" id="perfApplyG">Apply perf stack</button>
+            <button id="perfRefreshG">Refresh metrics</button>
+          </div>
+          <div class="hint-box" style="margin-top:1rem">
+            QoS upload: <span class="mono" id="perfQosUpG">—</span><br>
+            QoS download: <span class="mono" id="perfQosDownG">—</span>
+          </div>
+        </section>
+      </div>
+
+      <section class="section panel" id="foldingCard">
+        <div class="section-head">
+          <div>
+            <h2>Dimensional folding</h2>
+            <p>Zenodo stack — CPU/memory/network/storage lanes · 8196→32D · cube space · wire compression</p>
+          </div>
+          <div class="section-actions">
+            <button class="sm" id="foldResetStats">Reset stats</button>
+            <button class="primary sm" id="foldProbe">Run probe</button>
+          </div>
+        </div>
+        <div class="stat-grid" style="margin-bottom:.75rem">
+          <div class="stat"><label>Backend</label><div class="value" id="foldBackend">—</div></div>
+          <div class="stat"><label>Fold dim</label><div class="value mono" id="foldDim">—</div></div>
+          <div class="stat"><label>Probe ratio</label><div class="value" id="foldRatio">—</div></div>
+          <div class="stat"><label>Manifold 15D</label><div class="value mono" id="foldManifold">—</div></div>
+          <div class="stat"><label>Total saved</label><div class="value mono" id="foldSaved">—</div></div>
+          <div class="stat"><label>Avg ratio</label><div class="value" id="foldAvgRatio">—</div></div>
+          <div class="stat"><label>Operations</label><div class="value" id="foldOps">—</div></div>
+          <div class="stat"><label>Cache hit rate</label><div class="value" id="foldCacheRate">—</div></div>
+        </div>
+        <div class="fold-grid">
+          <div class="fold-block">
+            <h3>Container resources</h3>
+            <div class="lane-row">
+              <span class="lane-name">CPU</span>
+              <div>
+                <div class="meter"><span id="foldCpuBar" style="width:0%"></span></div>
+              </div>
+              <span class="lane-meta mono" id="foldCpuMeta">—</span>
+            </div>
+            <div class="lane-row">
+              <span class="lane-name">RAM</span>
+              <div>
+                <div class="meter"><span id="foldMemBar" style="width:0%"></span></div>
+              </div>
+              <span class="lane-meta mono" id="foldMemMeta">—</span>
+            </div>
+            <div class="lane-row">
+              <span class="lane-name">Disk</span>
+              <div>
+                <div class="meter"><span id="foldDiskBar" style="width:0%"></span></div>
+              </div>
+              <span class="lane-meta mono" id="foldDiskMeta">—</span>
+            </div>
+            <div class="hint-box" style="margin-top:.65rem;font-size:.78rem" id="foldHeadroomHint">—</div>
+          </div>
+          <div class="fold-block">
+            <h3>Lane compression</h3>
+            <div id="foldLaneRows"></div>
+            <div class="hint-box" style="margin-top:.65rem;font-size:.78rem" id="foldWireHint">—</div>
+          </div>
+        </div>
+        <div class="fold-block" style="margin-top:1rem">
+          <h3>Recent operations</h3>
+          <div class="table-wrap">
+            <table class="fold-recent">
+              <thead>
+                <tr><th>Time</th><th>Kind</th><th>Lane</th><th>Orig</th><th>Out</th><th>Saved</th><th>Ratio</th></tr>
+              </thead>
+              <tbody id="foldRecentRows">
+                <tr><td colspan="7" class="sub">No operations yet</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="hint-box" id="foldHint" style="margin-top:.75rem">Guides: <a href="https://zenodo.org/records/18728103" target="_blank" rel="noopener">18728103</a> · <a href="https://zenodo.org/records/18453148" target="_blank" rel="noopener">18453148</a> · <a href="https://zenodo.org/records/18102374" target="_blank" rel="noopener">18102374</a></div>
+      </section>
+    </div>
+
+  <footer>
+    array-firewall <span class="mono">:8090</span> · Sentinel <span class="mono">:8098</span> · API <span class="mono">/api/v1/*</span>
+  </footer>
+
+  <div class="modal-backdrop" id="groupModal" hidden aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="groupModalTitle">
+      <div class="modal-head">
+        <div>
+          <h2 id="groupModalTitle" style="margin:0;font-size:1.05rem">Group</h2>
+          <div class="sub" id="groupModalSub"></div>
+        </div>
+        <div>
+          <button type="button" class="primary" id="groupModalApply">Apply to members</button>
+          <button type="button" id="groupModalClose" style="margin-left:.35rem" onclick="closeGroupDetail()">Close</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <p class="sub" id="groupModalDesc" style="margin-top:0"></p>
+        <h3 class="sub" style="margin:.25rem 0 .5rem;font-weight:600;color:var(--text)">Applied policy</h3>
+        <div class="policy-grid" id="groupPolicyGrid"></div>
+        <h3 class="sub" style="margin:1rem 0 .5rem;font-weight:600;color:var(--text)">Members</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Device</th><th>MAC</th><th>IP</th><th>Internet</th><th>QoS</th><th>Applied</th><th></th></tr></thead>
+            <tbody id="groupMembers"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    function on(id, handler) {
+      const el = $(id);
+      if (!el) return;
+      el.onclick = handler;
+    }
+    function onAll(ids, handler) {
+      ids.forEach(id => on(id, handler));
+    }
+    function isGroupModalOpen() {
+      const modal = $('groupModal');
+      return !!modal && modal.classList.contains('is-open');
+    }
+
+    /* ── Tabs ── */
+    (function initTabs() {
+      const tabs = document.querySelectorAll('.tab');
+      const panels = document.querySelectorAll('.tab-panel');
+      const key = 'array-fw-tab';
+      function activate(name) {
+        tabs.forEach(t => {
+          const on = t.dataset.tab === name;
+          t.classList.toggle('active', on);
+          t.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        panels.forEach(p => p.classList.toggle('active', p.id === 'panel-' + name));
+        localStorage.setItem(key, name);
+      }
+      tabs.forEach(t => t.addEventListener('click', () => activate(t.dataset.tab)));
+      const saved = localStorage.getItem(key);
+      if (saved && document.getElementById('panel-' + saved)) activate(saved);
+    })();
+
+    (function initTrafficSubtabs() {
+      const tabs = document.querySelectorAll('.subtab[data-traffic]');
+      const panels = document.querySelectorAll('.traffic-panel');
+      const key = 'array-fw-traffic-sub';
+      function activate(name) {
+        tabs.forEach(t => t.classList.toggle('active', t.dataset.traffic === name));
+        panels.forEach(p => p.classList.toggle('active', p.id === 'traffic-' + name));
+        localStorage.setItem(key, name);
+      }
+      tabs.forEach(t => t.addEventListener('click', () => activate(t.dataset.traffic)));
+      const saved = localStorage.getItem(key);
+      if (saved && document.getElementById('traffic-' + saved)) activate(saved);
+    })();
+
+    const tokenKey = 'array-fw-token';
+    const sortKey = 'array-fw-device-sort';
+    let cachedDevices = [];
+    let cachedGroups = [];
+    let activeGroupId = null;
+    let suppressGroupOpen = false;
+    let deviceSort = { col: 'ip', dir: 'asc' };
+    try { deviceSort = { ...deviceSort, ...JSON.parse(localStorage.getItem(sortKey) || '{}') }; } catch (_) {}
+
+    function ipToNum(ip) {
+      if (!ip) return -1;
+      const p = String(ip).split('.').map(Number);
+      if (p.length !== 4 || p.some(n => Number.isNaN(n))) return -1;
+      return ((p[0] * 256 + p[1]) * 256 + p[2]) * 256 + p[3];
+    }
+    function isIpv4Label(text) {
+      return /^(?:\d{1,3}\.){3}\d{1,3}$/.test(String(text || '').trim());
+    }
+    function deviceDisplay(d) {
+      const host = (d.hostname || '').trim();
+      if (host && !/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(host) && !isIpv4Label(host)) return host;
+      const dn = (d.display_name || d.label || '').trim();
+      if (dn && !/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(dn) && !isIpv4Label(dn)) return dn;
+      const ip = (d.ip || '').trim();
+      if (isIpv4Label(ip)) return `device-${ip.split('.').pop()}`;
+      return 'Unnamed device';
+    }
+    function deviceName(d) { return deviceDisplay(d).toLowerCase(); }
+    function internetBadge(d) {
+      const allowed = d.allowed || d.is_admin;
+      return allowed
+        ? '<span class="badge ok">approved</span>'
+        : '<span class="badge warn">quarantine</span>';
+    }
+    function groupKey(d) { return ((d.groups || []).slice().sort()).join(',') || '\uffff'; }
+
+    function sortDevices(list) {
+      const dir = deviceSort.dir === 'desc' ? -1 : 1;
+      return [...list].sort((a, b) => {
+        let cmp = 0;
+        if (deviceSort.col === 'ip') cmp = ipToNum(a.ip) - ipToNum(b.ip);
+        else if (deviceSort.col === 'name') cmp = deviceName(a).localeCompare(deviceName(b));
+        else if (deviceSort.col === 'group') cmp = groupKey(a).localeCompare(groupKey(b));
+        if (cmp === 0) cmp = deviceName(a).localeCompare(deviceName(b));
+        return cmp * dir;
+      });
+    }
+
+    function updateSortHeaders() {
+      document.querySelectorAll('#devices-table th.sortable').forEach((th) => {
+        const col = th.dataset.sort;
+        const base = th.dataset.label || th.textContent.replace(/ [▲▼]$/, '');
+        th.textContent = base + (deviceSort.col === col ? (deviceSort.dir === 'asc' ? ' ▲' : ' ▼') : '');
+      });
+    }
+
+    function bindSortHeaders() {
+      document.querySelectorAll('#devices-table th.sortable').forEach((th) => {
+        th.onclick = () => {
+          const col = th.dataset.sort;
+          deviceSort.dir = deviceSort.col === col && deviceSort.dir === 'asc' ? 'desc' : 'asc';
+          if (deviceSort.col !== col) { deviceSort.col = col; deviceSort.dir = 'asc'; }
+          localStorage.setItem(sortKey, JSON.stringify(deviceSort));
+          updateSortHeaders();
+          renderDevices(cachedDevices, cachedGroups);
+        };
+      });
+      updateSortHeaders();
+    }
+
+    function authHeaders() {
+      const t = localStorage.getItem(tokenKey) || $('token').value.trim();
+      return t ? { Authorization: 'Bearer ' + t } : {};
+    }
+
+    async function api(path, opts = {}) {
+      const res = await fetch(path, {
+        ...opts,
+        headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(opts.headers || {}) },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      return data;
+    }
+
+    function showError(msg) {
+      const el = $('error');
+      if (!msg) { el.hidden = true; el.textContent = ''; return; }
+      el.hidden = false;
+      el.textContent = msg;
+    }
+
+    function qosTierBadge(tier) {
+      const t = (tier || 'other').toLowerCase();
+      const cls = (t === 'xbox' || t === 'wireless' || t === 'high') ? 'ok'
+        : (t === 'laptop' || t === 'phone' || t === 'medium') ? '' : 'warn';
+      const label = { xbox: 'xbox', wireless: 'wifi', laptop: 'laptop', phone: 'phone', other: 'other', high: 'high', medium: 'med', low: 'low' }[t] || t;
+      return `<span class="badge ${cls} tier-${t}">${label}</span>`;
+    }
+
+    function policyCard(title, summary) {
+      if (!summary) return '';
+      return `<div class="policy-card"><h3>${title}</h3><div class="value">${summary.label || '—'}</div><div class="detail">${summary.detail || ''}</div></div>`;
+    }
+
+    function openGroupLink(id, ev) {
+      if (ev) ev.stopPropagation();
+      if (suppressGroupOpen) return;
+      openGroupDetail(id);
+    }
+
+    async function openGroupDetail(groupId) {
+      if (suppressGroupOpen) return;
+      activeGroupId = groupId;
+      try {
+        const data = await api(`/api/v1/groups/${encodeURIComponent(groupId)}`);
+        renderGroupDetail(data.group || data);
+        const modal = $('groupModal');
+        modal.hidden = false;
+        modal.classList.add('is-open');
+        modal.setAttribute('aria-hidden', 'false');
+        document.querySelectorAll('tr.group-row').forEach(tr => tr.classList.toggle('selected', tr.dataset.groupId === groupId));
+      } catch (e) { showError(e.message); }
+    }
+
+    function closeGroupDetail() {
+      activeGroupId = null;
+      const modal = $('groupModal');
+      if (!modal) return;
+      modal.hidden = true;
+      modal.classList.remove('is-open');
+      modal.setAttribute('aria-hidden', 'true');
+      document.querySelectorAll('tr.group-row.selected').forEach(tr => tr.classList.remove('selected'));
+      suppressGroupOpen = true;
+      window.setTimeout(() => { suppressGroupOpen = false; }, 300);
+    }
+
+    document.addEventListener('click', (ev) => {
+      if (ev.target.closest('#groupModalClose')) { ev.preventDefault(); closeGroupDetail(); return; }
+      if (ev.target.id === 'groupModal') { ev.preventDefault(); closeGroupDetail(); }
+    });
+    document.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape' && isGroupModalOpen()) { ev.preventDefault(); closeGroupDetail(); }
+    });
+
+    function renderGroupDetail(g) {
+      $('groupModalTitle').textContent = g.name || g.id;
+      $('groupModalSub').innerHTML = `<span class="mono">${g.id}</span>${g.updated ? ' · ' + g.updated.replace('T', ' ').replace('Z', ' UTC') : ''}`;
+      $('groupModalDesc').textContent = g.description || 'No description.';
+      const ps = g.policy_summary || {};
+      $('groupPolicyGrid').innerHTML = [
+        policyCard('Internet', ps.internet), policyCard('QoS', ps.qos),
+        policyCard('Security', ps.packet_shield), policyCard('DNS filter', ps.dns_filter),
+        policyCard('DHCP', ps.dhcp_allocate),
+      ].join('');
+      const tbody = $('groupMembers');
+      tbody.innerHTML = '';
+      for (const m of g.member_details || []) {
+        const tr = document.createElement('tr');
+        const allowed = m.allowed || m.is_admin;
+        const applied = m.policy_from_group ? '<span class="badge ok">yes</span>'
+          : (m.policy && Object.keys(m.policy).length ? '<span class="badge warn">stale</span>' : '<span class="badge bad">no</span>');
+        tr.innerHTML = `<td>${deviceDisplay(m)}</td><td class="mono">${m.mac}</td><td class="mono">${m.ip || '—'}</td>
+          <td>${internetBadge(m)}</td>
+          <td>${qosTierBadge(m.qos_tier)}</td><td>${applied}</td><td></td>`;
+        const rm = document.createElement('button');
+        rm.className = 'danger sm'; rm.textContent = 'Remove';
+        rm.onclick = async (ev) => {
+          ev.stopPropagation();
+          if (!confirm(`Remove ${m.label || m.mac} from ${g.name}?`)) return;
+          try {
+            await api(`/api/v1/groups/${g.id}/members/remove`, { method: 'POST', body: JSON.stringify({ mac: m.mac }) });
+            await refresh(); await openGroupDetail(g.id);
+          } catch (e) { showError(e.message); }
+        };
+        tr.lastElementChild.appendChild(rm);
+        tbody.appendChild(tr);
+      }
+      if (!(g.member_details || []).length) tbody.innerHTML = '<tr><td colspan="7" class="sub">No members</td></tr>';
+    }
+
+    function renderGroups(groupList) {
+      const tbody = $('groups');
+      tbody.innerHTML = '';
+      for (const g of groupList || []) {
+        const tr = document.createElement('tr');
+        tr.className = 'group-row';
+        tr.dataset.groupId = g.id;
+        const cfg = g.config || {};
+        tr.innerHTML = `<td><strong class="group-link">${g.name}</strong><br><span class="mono sub">${g.id}</span></td>
+          <td>${g.member_count || 0}</td>
+          <td class="mono">${cfg.internet || '—'} · ${cfg.qos_profile || '—'} · shield:${cfg.packet_shield || 'off'}</td>
+          <td class="group-actions"></td>`;
+        tr.querySelector('.group-link').onclick = (ev) => openGroupLink(g.id, ev);
+        tr.onclick = (ev) => {
+          if (suppressGroupOpen || ev.target.closest('.group-actions') || ev.target.closest('button')) return;
+          openGroupDetail(g.id);
+        };
+        const actions = tr.querySelector('.group-actions');
+        const apply = document.createElement('button');
+        apply.className = 'primary sm'; apply.textContent = 'Apply';
+        apply.onclick = async (ev) => {
+          ev.stopPropagation();
+          try {
+            const r = await api(`/api/v1/groups/${g.id}/apply`, { method: 'POST', body: '{}' });
+            showError(`Applied to ${r.applied} device(s)`); setTimeout(() => showError(''), 3000);
+            await refresh();
+            if (activeGroupId === g.id) await openGroupDetail(g.id);
+          } catch (e) { showError(e.message); }
+        };
+        const edit = document.createElement('button');
+        edit.className = 'sm'; edit.textContent = 'Edit'; edit.style.marginLeft = '.3rem';
+        edit.onclick = async (ev) => {
+          ev.stopPropagation();
+          const internet = prompt('Internet: allowed or denied', cfg.internet || 'allowed');
+          if (!internet) return;
+          const qos = prompt('QoS: high, balanced, or low', cfg.qos_profile || 'balanced');
+          if (!qos) return;
+          const shield = prompt('Packet shield: off or normal', cfg.packet_shield || 'off');
+          if (shield === null) return;
+          try {
+            await api(`/api/v1/groups/${g.id}/update`, { method: 'POST', body: JSON.stringify({
+              config: { internet, qos_profile: qos, dns_filter: cfg.dns_filter || 'off', packet_shield: shield || 'off', dhcp_allocate: cfg.dhcp_allocate !== false },
+            })});
+            await refresh();
+            if (activeGroupId === g.id) await openGroupDetail(g.id);
+          } catch (e) { showError(e.message); }
+        };
+        const del = document.createElement('button');
+        del.className = 'danger sm'; del.textContent = 'Delete'; del.style.marginLeft = '.3rem';
+        del.onclick = async (ev) => {
+          ev.stopPropagation();
+          if (!confirm(`Delete group ${g.name}?`)) return;
+          try {
+            await api(`/api/v1/groups/${g.id}/delete`, { method: 'POST', body: '{}' });
+            if (activeGroupId === g.id) closeGroupDetail();
+            await refresh();
+          } catch (e) { showError(e.message); }
+        };
+        actions.append(apply, edit, del);
+        tbody.appendChild(tr);
+      }
+      if (!groupList || !groupList.length) tbody.innerHTML = '<tr><td colspan="4" class="sub">No groups yet</td></tr>';
+    }
+
+    async function setDeviceDhcp(mac, patch) {
+      if (!(localStorage.getItem(tokenKey) || $('token').value.trim())) { showError('Connect API token first'); return; }
+      try { await api(`/api/v1/devices/${mac}/dhcp`, { method: 'POST', body: JSON.stringify(patch) }); await refresh(); }
+      catch (e) { showError(e.message); }
+    }
+
+    function renderDevices(devices, groupList) {
+      cachedDevices = devices || [];
+      cachedGroups = groupList || [];
+      const tbody = $('devices');
+      tbody.innerHTML = '';
+      const groupOptions = (groupList || []).map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+      for (const d of sortDevices(cachedDevices)) {
+        const tr = document.createElement('tr');
+        const allowed = d.allowed || d.is_admin;
+        const allocate = d.allocate !== false;
+        const reserve = allocate && !!d.reserve;
+        const grpBadges = (d.groups || []).map(id => `<span class="badge warn group-link" data-group-id="${id}">${id}</span>`).join(' ') || '—';
+        const statusBadge = !allocate
+          ? (d.status === 'google-router' || (d.groups || []).includes('google-mesh')
+            ? '<span class="badge ok">Google router (.2)</span>'
+            : '<span class="badge warn">external DHCP</span>')
+          : (reserve ? '<span class="badge ok">reserved</span>' : '<span class="badge warn">dynamic</span>');
+        tr.innerHTML = `<td>${deviceDisplay(d)}${d.is_admin ? ' <span class="badge ok">admin</span>' : ''}${d.identity_valid === false && d.hostname ? ' <span class="badge bad" title="Hostname does not match IP">!</span>' : ''}</td>
+          <td class="mono">${d.mac}</td><td class="mono">${d.ip || '—'} ${statusBadge}</td><td></td><td></td>
+          <td>${grpBadges}</td>
+          <td>${internetBadge(d)}</td>
+          <td class="mono">${(d.last_seen || '').replace('T',' ').replace('Z','') || '—'}</td><td></td>`;
+        tr.querySelectorAll('.group-link[data-group-id]').forEach(el => el.onclick = (ev) => openGroupLink(el.dataset.groupId, ev));
+        const cells = tr.querySelectorAll('td');
+        const allocCb = document.createElement('input'); allocCb.type = 'checkbox'; allocCb.checked = allocate;
+        allocCb.onchange = () => setDeviceDhcp(d.mac, { allocate: allocCb.checked, reserve: allocCb.checked ? reserve : false, ip: d.ip || d.dhcp_ip || '' });
+        const allocLabel = document.createElement('label'); allocLabel.className = 'inline'; allocLabel.append(allocCb, document.createTextNode(d.status === 'google-router' ? ' AF DHCP' : ' DHCP'));
+        cells[3].appendChild(allocLabel);
+        const resCb = document.createElement('input'); resCb.type = 'checkbox'; resCb.checked = reserve;
+        resCb.disabled = !allocate || !(d.ip || d.dhcp_ip);
+        resCb.onchange = () => setDeviceDhcp(d.mac, { allocate: true, reserve: resCb.checked, ip: d.ip || d.dhcp_ip || '' });
+        const resLabel = document.createElement('label'); resLabel.className = 'inline'; resLabel.append(resCb, document.createTextNode(' fix IP'));
+        cells[4].appendChild(resLabel);
+        if (!d.is_admin) {
+          const approve = document.createElement('button'); approve.className = 'primary sm'; approve.textContent = 'Approve'; approve.disabled = allowed;
+          approve.onclick = () => setDevice(d.mac, true);
+          const revoke = document.createElement('button'); revoke.className = 'danger sm'; revoke.textContent = 'Revoke'; revoke.style.marginLeft = '.25rem'; revoke.disabled = !allowed;
+          revoke.onclick = () => setDevice(d.mac, false);
+          cells[8].append(approve, revoke);
+          if (groupOptions) {
+            const sel = document.createElement('select'); sel.style.marginLeft = '.35rem'; sel.innerHTML = '<option value="">+ group</option>' + groupOptions;
+            sel.onchange = async () => {
+              if (!sel.value) return;
+              try {
+                await api(`/api/v1/groups/${sel.value}/members/add`, { method: 'POST', body: JSON.stringify({ mac: d.mac, apply: true }) });
+                showError(`Added to ${sel.value}`); setTimeout(() => showError(''), 2500); await refresh();
+              } catch (e) { showError(e.message); }
+              sel.value = '';
+            };
+            cells[8].append(sel);
+          }
+        }
+        tbody.appendChild(tr);
+      }
+    }
+
+    async function setDevice(mac, allow) {
+      if (!(localStorage.getItem(tokenKey) || $('token').value.trim())) { showError('Connect API token first'); return; }
+      try {
+        const r = await api(`/api/v1/devices/${mac}/${allow ? 'allow' : 'deny'}`, { method: 'POST', body: '{}' });
+        showError(`${allow ? 'Approved' : 'Quarantined'}: ${deviceDisplay(r.device || {}) || mac}`); setTimeout(() => showError(''), 3000);
+        await refresh();
+      } catch (e) { showError(e.message === 'unauthorized' ? 'Invalid API token' : e.message); }
+    }
+
+    function fillDhcpForm(cfg) {
+      $('dhcpEnabled').checked = cfg.enabled !== false;
+      $('dhcpIf').value = cfg.interface || 'eth1';
+      $('dhcpStart').value = cfg.range_start || '10.99.0.50';
+      $('dhcpEnd').value = cfg.range_end || '10.99.0.200';
+      $('dhcpLease').value = cfg.lease_time || '12h';
+      $('dhcpGw').value = cfg.gateway || '10.99.0.1';
+      $('dhcpDns').value = cfg.dns || '10.99.0.1';
+      $('dhcpUpstream').value = (cfg.upstream_dns || ['192.168.167.1']).join(', ');
+      $('dhcpDomain').value = cfg.domain || 'array-firewall.local';
+    }
+
+    function renderDhcpLeases(leases) {
+      const tbody = $('dhcpLeases');
+      tbody.innerHTML = '';
+      for (const l of leases || []) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${l.hostname || '—'}</td><td class="mono">${l.mac}</td><td class="mono">${l.ip}</td>
+          <td class="mono">${l.expires_at ? l.expires_at.replace('T',' ').slice(0,19) : '—'}</td>
+          <td>${l.static ? '<span class="badge ok">yes</span>' : '—'}</td>`;
+        tbody.appendChild(tr);
+      }
+      if (!leases || !leases.length) tbody.innerHTML = '<tr><td colspan="5" class="sub">No active leases</td></tr>';
+    }
+
+    function renderReservations(items) {
+      const tbody = $('dhcpReservations');
+      tbody.innerHTML = '';
+      for (const r of items || []) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${r.hostname || '—'}</td><td class="mono">${r.mac}</td><td class="mono">${r.ip}</td><td></td>`;
+        const btn = document.createElement('button'); btn.className = 'danger sm'; btn.textContent = 'Remove';
+        btn.onclick = async () => { try { await api('/api/v1/dhcp/reservations/remove', { method: 'POST', body: JSON.stringify({ mac: r.mac }) }); await refreshDhcp(); } catch (e) { showError(e.message); } };
+        tr.lastElementChild.appendChild(btn);
+        tbody.appendChild(tr);
+      }
+      if (!items || !items.length) tbody.innerHTML = '<tr><td colspan="4" class="sub">No reservations</td></tr>';
+    }
+
+    function setHtml(ids, html) { ids.forEach(id => { const el = $(id); if (el) el.innerHTML = html; }); }
+    function setText(ids, text) { ids.forEach(id => { const el = $(id); if (el) el.textContent = text; }); }
+
+    async function refreshStability() {
+      if (!$('stabLatency')) return;
+      try {
+        const s = await api('/api/v1/stability/status');
+        const lat = s.latency || {};
+        $('stabLatency').innerHTML = lat.avg_ms != null
+          ? `<span class="badge ${lat.avg_ms < 25 ? 'ok' : (lat.avg_ms < 45 ? 'warn' : 'bad')}">${lat.avg_ms} ms</span>`
+          : '—';
+        const sh = s.shaping || {};
+        const saturated = sh.congested ?? sh.saturated;
+        $('stabShaping').innerHTML = sh.active
+          ? (saturated
+            ? '<span class="badge warn">congested</span>'
+            : '<span class="badge ok">active</span>')
+          : '<span class="badge bad">off</span>';
+        const auto = s.autorate;
+        const contract = s.contract;
+        if (contract) {
+          $('stabAutorate').textContent = `${contract.wan_up}↑ / ${contract.wan_down}↓ (1G sync @ ${Math.round((contract.factor || 0.95) * 100)}%)`;
+        } else {
+          $('stabAutorate').textContent = auto
+            ? `${auto.upload_mbps_shaped || auto.wan_up || '?'}↑ / ${auto.download_mbps_shaped || auto.wan_down || '?'}↓`
+            : 'not run';
+        }
+        const rec = (s.recommendations || []).join(' · ') || 'All stability checks passed.';
+        $('stabRecommend').textContent = rec;
+        if ($('wanUp') && s.qos && s.qos.config) {
+          $('wanUp').value = s.qos.config.wan_up || '';
+          $('wanDown').value = s.qos.config.wan_down || '';
+        }
+        if (auto) {
+          $('measUp').textContent = auto.upload_mbps_raw ? `${auto.upload_mbps_raw} Mbps` : '—';
+          $('measDown').textContent = auto.download_mbps_raw ? `${auto.download_mbps_raw} Mbps` : '—';
+        }
+        const up = (sh.interfaces || {}).upload || {};
+        const down = (sh.interfaces || {}).download || {};
+        $('qosDrops').textContent = (up.dropped || 0) + (down.dropped || 0);
+        $('qosOverlimits').textContent = (up.overlimits || 0) + (down.overlimits || 0);
+      } catch (e) {
+        $('stabRecommend').textContent = 'Stability status unavailable';
+      }
+    }
+
+    async function refreshFolding() {
+      if (!$('foldBackend')) return;
+      try {
+        const [f, s] = await Promise.all([
+          api('/api/v1/folding/status'),
+          api('/api/v1/folding/savings'),
+        ]);
+        $('foldBackend').innerHTML = f.enabled
+          ? `<span class="badge ok">${f.backend || 'local'}</span>`
+          : '<span class="badge warn">off</span>';
+        $('foldDim').textContent = f.fold_dim || '—';
+        $('foldManifold').textContent = f.manifold_expansion_ratio != null ? `${f.manifold_expansion_ratio}×` : '—';
+        const lp = f.last_probe || {};
+        $('foldRatio').textContent = lp.ratio != null ? `${lp.ratio}×` : '—';
+
+        const totals = s.totals || {};
+        const headroom = s.headroom || {};
+        const saved = totals.saved_human || '0 B';
+        const avgRatio = totals.avg_ratio != null ? `${totals.avg_ratio}×` : '—';
+        const ops = totals.operations != null ? totals.operations : 0;
+        const cacheRate = headroom.cache_hit_rate_pct != null ? `${headroom.cache_hit_rate_pct}%` : '—';
+
+        $('foldSaved').textContent = saved;
+        $('foldAvgRatio').textContent = avgRatio;
+        $('foldOps').textContent = ops;
+        $('foldCacheRate').textContent = cacheRate;
+
+        if ($('foldOvSaved')) $('foldOvSaved').textContent = saved;
+        if ($('foldOvRatio')) $('foldOvRatio').textContent = avgRatio;
+        if ($('foldOvCache')) $('foldOvCache').textContent = cacheRate;
+        if ($('foldOvHeadroom')) {
+          $('foldOvHeadroom').textContent = headroom.pct_of_container_ram != null
+            ? `${headroom.pct_of_container_ram}%`
+            : '—';
+        }
+
+        const cpu = (s.resources || {}).cpu || {};
+        const mem = (s.resources || {}).memory || {};
+        const disk = (s.resources || {}).storage || {};
+        const cpuPct = cpu.util_pct != null ? Math.min(cpu.util_pct, 100) : 0;
+        const memPct = mem.used_pct != null ? Math.min(mem.used_pct, 100) : 0;
+        const diskPct = disk.used_pct != null ? Math.min(disk.used_pct, 100) : 0;
+        if ($('foldCpuBar')) $('foldCpuBar').style.width = `${cpuPct}%`;
+        if ($('foldMemBar')) $('foldMemBar').style.width = `${memPct}%`;
+        if ($('foldDiskBar')) $('foldDiskBar').style.width = `${diskPct}%`;
+        if ($('foldCpuMeta')) {
+          $('foldCpuMeta').textContent = cpu.cores
+            ? `${cpu.util_pct || 0}% · load ${cpu.load1 || 0}/${cpu.cores}`
+            : '—';
+        }
+        if ($('foldMemMeta')) {
+          $('foldMemMeta').textContent = mem.used_human
+            ? `${mem.used_human} / ${mem.total_human}`
+            : '—';
+        }
+        if ($('foldDiskMeta')) {
+          $('foldDiskMeta').textContent = disk.used_human
+            ? `${disk.used_human} / ${disk.total_human}`
+            : '—';
+        }
+        if ($('foldHeadroomHint')) {
+          $('foldHeadroomHint').textContent = headroom.virtual_memory_freed_human
+            ? `Virtual memory freed by folding: ${headroom.virtual_memory_freed_human} (${headroom.pct_of_container_ram || 0}% of container RAM) · ${ops} ops since ${s.started_at || '—'}`
+            : 'Run a fold probe or wire compress to accumulate savings stats.';
+        }
+
+        const lanes = s.lanes || {};
+        const laneOrder = ['cpu', 'memory', 'network', 'storage'];
+        if ($('foldLaneRows')) {
+          $('foldLaneRows').innerHTML = laneOrder.map(name => {
+            const lane = lanes[name] || {};
+            const share = lane.share_pct || 0;
+            const ratio = lane.avg_ratio ? `${lane.avg_ratio}×` : '—';
+            const savedLane = lane.saved_human || '0 B';
+            const opsLane = lane.operations || 0;
+            return `<div class="lane-row">
+              <span class="lane-name">${name}</span>
+              <div><div class="meter"><span style="width:${Math.min(share, 100)}%"></span></div></div>
+              <span class="lane-meta">${savedLane} · ${ratio} · ${opsLane} ops</span>
+            </div>`;
+          }).join('');
+        }
+
+        const wire = s.wire || {};
+        if ($('foldWireHint')) {
+          $('foldWireHint').textContent = wire.operations
+            ? `Wire compression: ${wire.saved_human || '0 B'} saved · ${wire.avg_ratio || 0}× avg · best ${wire.best_ratio || 0}× · ${wire.operations} ops`
+            : 'Wire compression: no operations yet (GPU analyze uses wire frames).';
+        }
+
+        const recent = s.recent || [];
+        if ($('foldRecentRows')) {
+          $('foldRecentRows').innerHTML = recent.length
+            ? recent.slice().reverse().map(r => `<tr>
+                <td class="mono">${(r.ts || '—').replace('T', ' ').replace('Z', '')}</td>
+                <td>${r.kind || '—'}</td>
+                <td>${r.lane || 'wire'}</td>
+                <td class="mono">${r.orig_size != null ? r.orig_size + ' B' : '—'}</td>
+                <td class="mono">${r.compressed_size != null ? r.compressed_size + ' B' : '—'}</td>
+                <td class="mono">${r.bytes_saved != null ? r.bytes_saved + ' B' : '—'}</td>
+                <td>${r.ratio != null ? r.ratio + '×' : '—'}${r.cache_hit ? ' · cache' : ''}</td>
+              </tr>`).join('')
+            : '<tr><td colspan="7" class="sub">No operations yet</td></tr>';
+        }
+
+        $('foldHint').innerHTML = f.relay_url
+          ? `Relay <span class="mono">${f.relay_url}</span> · ${(f.zenodo_references || []).length} papers linked · updated ${s.updated_at || '—'}`
+          : `Local engine · ${(f.zenodo_references || []).length} Zenodo papers · updated ${s.updated_at || '—'}`;
+      } catch (e) {
+        $('foldHint').textContent = 'Folding status unavailable';
+      }
+    }
+
+    function gradeBadge(grade) {
+      const g = String(grade || 'unknown').toLowerCase();
+      const label = g === 'unknown' ? 'pending' : g;
+      return `<span class="grade ${g}">${label}</span>`;
+    }
+
+    function tierBadge(tier) {
+      const t = String(tier || 'other').toLowerCase();
+      const cls = (t === 'xbox' || t === 'wireless' || t === 'high') ? 'ok'
+        : (t === 'other' || t === 'low') ? 'warn' : '';
+      const label = { xbox: 'xbox', wireless: 'wifi', laptop: 'laptop', phone: 'phone', other: 'other', high: 'high', medium: 'med', low: 'low' }[t] || t;
+      return `<span class="badge ${cls}">${label}</span>`;
+    }
+
+    function formatOverlimits(q) {
+      if (q.overlimits_delta == null) return '—';
+      const rate = q.overlimits_per_sec != null ? ` · ${q.overlimits_per_sec}/s` : '';
+      return `+${q.overlimits_delta}${rate}`;
+    }
+
+    function renderHistStats(elId, hist) {
+      const el = $(elId);
+      if (!el || !hist) return;
+      el.innerHTML = `
+        <span class="low">Low <strong>${hist.low_human || '—'}</strong></span>
+        <span>Now <strong>${hist.current_human || '—'}</strong></span>
+        <span>Avg <strong>${hist.avg_human || '—'}</strong></span>
+        <span class="peak">Peak <strong>${hist.peak_human || '—'}</strong></span>`;
+    }
+
+    function renderHistogram(containerId, hist, egress) {
+      const el = $(containerId);
+      if (!el) return;
+      const buckets = (hist && hist.buckets) || [];
+      if (!buckets.length) {
+        el.innerHTML = '<span class="sub" style="padding:.5rem">Collecting samples — refresh a few times while traffic flows.</span>';
+        return;
+      }
+      el.innerHTML = buckets.map(b => {
+        const h = Math.max(2, b.height_pct || 0);
+        const title = `${b.from_human} – ${b.to_human} · ${b.count} samples (${b.pct}%)`;
+        return `<div class="hist-bar${egress ? ' egress' : ''}" style="height:${h}%" title="${title}"></div>`;
+      }).join('');
+      const lo = $(containerId.replace('Hist', 'Hist').replace('Ingress', 'IngressLo').replace('Egress', 'EgressLo'));
+      if (containerId === 'telHistIngress' && $('telHistIngressLo')) {
+        $('telHistIngressLo').textContent = hist.low_human || 'low';
+      }
+      if (containerId === 'telHistEgress' && $('telHistEgressLo')) {
+        $('telHistEgressLo').textContent = hist.low_human || 'low';
+      }
+    }
+
+    const telDeviceKey = 'array-fw-tel-device';
+    const telSortKey = 'array-fw-tel-device-sort';
+    let telSelectedIp = localStorage.getItem(telDeviceKey) || '';
+    let cachedTelDevices = [];
+    let cachedTelDeviceHist = null;
+    let telDeviceSort = { col: 'down', dir: 'desc' };
+    try { telDeviceSort = { ...telDeviceSort, ...JSON.parse(localStorage.getItem(telSortKey) || '{}') }; } catch (_) {}
+
+    function telDeviceName(d) { return deviceDisplay(d).toLowerCase(); }
+    function qosTierRank(tier) {
+      const ranks = { xbox: 5, wireless: 4, laptop: 3, phone: 2, other: 1, high: 5, medium: 3, low: 1 };
+      return ranks[(tier || 'other').toLowerCase()] || 0;
+    }
+
+    function sortTelDevices(list) {
+      const dir = telDeviceSort.dir === 'desc' ? -1 : 1;
+      return [...list].sort((a, b) => {
+        const ta = a.traffic || {};
+        const tb = b.traffic || {};
+        let cmp = 0;
+        if (telDeviceSort.col === 'name') cmp = telDeviceName(a).localeCompare(telDeviceName(b));
+        else if (telDeviceSort.col === 'ip') cmp = ipToNum(a.ip) - ipToNum(b.ip);
+        else if (telDeviceSort.col === 'qos') cmp = qosTierRank(a.qos_tier) - qosTierRank(b.qos_tier);
+        else if (telDeviceSort.col === 'down') cmp = (ta.bps_down || 0) - (tb.bps_down || 0);
+        else if (telDeviceSort.col === 'up') cmp = (ta.bps_up || 0) - (tb.bps_up || 0);
+        else if (telDeviceSort.col === 'total_down') cmp = (ta.bytes_down || 0) - (tb.bytes_down || 0);
+        else if (telDeviceSort.col === 'total_up') cmp = (ta.bytes_up || 0) - (tb.bytes_up || 0);
+        else if (telDeviceSort.col === 'conns') cmp = (ta.connections || 0) - (tb.connections || 0);
+        else cmp = (ta.bps_down || 0) - (tb.bps_down || 0);
+        if (cmp === 0) cmp = telDeviceName(a).localeCompare(telDeviceName(b));
+        return cmp * dir;
+      });
+    }
+
+    function updateTelSortHeaders() {
+      document.querySelectorAll('#tel-devices-table th.sortable').forEach((th) => {
+        const col = th.dataset.sort;
+        const base = th.dataset.label || th.textContent.replace(/ [▲▼]$/, '');
+        th.textContent = base + (telDeviceSort.col === col ? (telDeviceSort.dir === 'asc' ? ' ▲' : ' ▼') : '');
+      });
+    }
+
+    function bindTelSortHeaders() {
+      document.querySelectorAll('#tel-devices-table th.sortable').forEach((th) => {
+        th.onclick = () => {
+          const col = th.dataset.sort;
+          telDeviceSort.dir = telDeviceSort.col === col && telDeviceSort.dir === 'asc' ? 'desc' : 'asc';
+          if (telDeviceSort.col !== col) {
+            telDeviceSort.col = col;
+            telDeviceSort.dir = (col === 'name' || col === 'ip') ? 'asc' : 'desc';
+          }
+          localStorage.setItem(telSortKey, JSON.stringify(telDeviceSort));
+          updateTelSortHeaders();
+          renderTelDeviceRows(cachedTelDevices, cachedTelDeviceHist);
+        };
+      });
+      updateTelSortHeaders();
+    }
+
+    function defaultTelDevice(devs) {
+      if (telSelectedIp && devs.some(d => d.ip === telSelectedIp)) return telSelectedIp;
+      const xbox = devs.find(d => (d.groups || []).includes('gaming') || /xbox/i.test(d.label || ''));
+      if (xbox && xbox.ip) return xbox.ip;
+      const active = devs.find(d => d.ip && ((d.traffic || {}).bps_up + (d.traffic || {}).bps_down) > 0);
+      return (active || devs.find(d => d.ip) || {}).ip || '';
+    }
+
+    function selectTelDevice(ip, label) {
+      telSelectedIp = ip || '';
+      localStorage.setItem(telDeviceKey, telSelectedIp);
+      document.querySelectorAll('#telDeviceRows tr[data-ip]').forEach(tr => {
+        tr.classList.toggle('selected', tr.dataset.ip === telSelectedIp);
+      });
+      startTelemetryStream();
+      loadDeviceHistogram(label);
+    }
+
+    function applyDeviceHistogram(h, fallbackLabel) {
+      if (!$('telDevHistDown')) return;
+      if (!h || !telSelectedIp) {
+        $('telDevHistTitle').textContent = 'Select a device';
+        $('telDevHistWindow').textContent = '—';
+        renderHistStats('telDevHistDownStats', null);
+        renderHistStats('telDevHistUpStats', null);
+        renderHistogram('telDevHistDown', { buckets: [] }, false);
+        renderHistogram('telDevHistUp', { buckets: [] }, true);
+        return;
+      }
+      const label = h.device_label || fallbackLabel || telSelectedIp;
+      $('telDevHistTitle').textContent = label;
+      $('telDevHistWindow').textContent = h.sample_count
+        ? `${h.sample_count} samples · ~${h.window_minutes || 0} min`
+        : 'Building history…';
+      renderHistStats('telDevHistDownStats', h.ingress);
+      renderHistStats('telDevHistUpStats', h.egress);
+      renderHistogram('telDevHistDown', h.ingress, false);
+      renderHistogram('telDevHistUp', h.egress, true);
+      if ($('telDevHistDownLo')) $('telDevHistDownLo').textContent = (h.ingress || {}).low_human || 'low';
+      if ($('telDevHistUpLo')) $('telDevHistUpLo').textContent = (h.egress || {}).low_human || 'low';
+    }
+
+    async function loadDeviceHistogram(fallbackLabel) {
+      if (!$('telDevHistDown')) return;
+      if (!telSelectedIp) {
+        applyDeviceHistogram(null, fallbackLabel);
+        return;
+      }
+      try {
+        const h = await api('/api/v1/telemetry/history?device=' + encodeURIComponent(telSelectedIp));
+        applyDeviceHistogram(h, fallbackLabel);
+      } catch (e) {
+        $('telDevHistTitle').textContent = fallbackLabel || telSelectedIp;
+        $('telDevHistWindow').textContent = 'History unavailable';
+      }
+    }
+
+    function renderTelDeviceRows(devs, deviceHist) {
+      if (!$('telDeviceRows')) return;
+      cachedTelDevices = devs;
+      cachedTelDeviceHist = deviceHist || null;
+      if (!devs.length) {
+        $('telDeviceRows').innerHTML = '<tr><td colspan="8" class="sub">No devices with IPs — assign DHCP leases first.</td></tr>';
+        return;
+      }
+      if (!telSelectedIp || !devs.some(d => d.ip === telSelectedIp)) {
+        telSelectedIp = defaultTelDevice(devs);
+        localStorage.setItem(telDeviceKey, telSelectedIp);
+      }
+      const sorted = sortTelDevices(devs);
+      $('telDeviceRows').innerHTML = sorted.map(d => {
+        const tr = d.traffic || {};
+        const ip = d.ip || '';
+        const sel = ip && ip === telSelectedIp ? ' selected' : '';
+        const label = deviceDisplay(d).replace(/"/g, '&quot;');
+        return `<tr class="tel-device-row${sel}" data-ip="${ip}" data-label="${label}" role="button" tabindex="0">
+          <td>${deviceDisplay(d)}</td>
+          <td class="mono">${ip || '—'}</td>
+          <td>${tierBadge(d.qos_tier)}</td>
+          <td class="mono">${tr.bps_down_human || '—'}</td>
+          <td class="mono">${tr.bps_up_human || '—'}</td>
+          <td class="mono">${tr.bytes_down_human || '—'}</td>
+          <td class="mono">${tr.bytes_up_human || '—'}</td>
+          <td>${tr.connections != null ? tr.connections : '—'}</td>
+        </tr>`;
+      }).join('');
+      document.querySelectorAll('#telDeviceRows tr[data-ip]').forEach(tr => {
+        const ip = tr.dataset.ip;
+        if (!ip) return;
+        const label = tr.dataset.label || ip;
+        tr.onclick = () => selectTelDevice(ip, label);
+        tr.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectTelDevice(ip, label); } };
+      });
+      const selected = devs.find(d => d.ip === telSelectedIp);
+      const label = selected ? (selected.label || selected.ip) : '';
+      if (deviceHist && deviceHist.device_ip === telSelectedIp) {
+        applyDeviceHistogram(deviceHist, label);
+      } else if (telSelectedIp) {
+        loadDeviceHistogram(label);
+      } else {
+        applyDeviceHistogram(null, '');
+      }
+    }
+
+    function renderQueueSide(q, prefix) {
+      if (!q || !q.ok) {
+        if ($(prefix + 'Summary')) $(prefix + 'Summary').textContent = 'Queue unavailable';
+        return;
+      }
+      if ($(prefix + 'Grade')) $(prefix + 'Grade').innerHTML = gradeBadge(q.buffer_grade);
+      if ($(prefix + 'Summary')) {
+        $(prefix + 'Summary').textContent = [
+          q.kind || 'qdisc',
+          q.shaped_rate ? `shaped ${q.shaped_rate}` : null,
+          q.target_ms != null ? `target ${q.target_ms}ms` : null,
+          q.memory_limit ? `mem ${q.memory_limit}` : null,
+        ].filter(Boolean).join(' · ') || (q.summary || '—');
+      }
+      if ($(prefix + 'Backlog')) $(prefix + 'Backlog').textContent = q.backlog_bytes != null ? `${q.backlog_bytes} B` : '—';
+      if ($(prefix + 'Dropped')) {
+        const dropDelta = q.dropped_delta != null && q.dropped_delta > 0 ? ` (+${q.dropped_delta})` : '';
+        $(prefix + 'Dropped').textContent = q.dropped != null ? `${q.dropped}${dropDelta}` : '—';
+      }
+      if ($(prefix + 'Over')) $(prefix + 'Over').textContent = formatOverlimits(q);
+    }
+
+    async function applyTelemetryPayload(t, opts = {}) {
+      const includeHistogram = opts.includeHistogram !== false;
+      const wan = t.wan || {};
+      const ingress = wan.ingress || {};
+      const egress = wan.egress || {};
+      const lat = wan.latency || {};
+      const shaping = wan.shaping || {};
+      const upSh = shaping.upload || {};
+      const downSh = shaping.download || {};
+      const qos = wan.qos || {};
+      const qRoot = t.queues || {};
+
+      const inRate = ingress.human || '—';
+      const outRate = egress.human || '—';
+      if ($('telIngressRate')) $('telIngressRate').textContent = inRate;
+      if ($('telEgressRate')) $('telEgressRate').textContent = outRate;
+      if ($('telIngressMeta')) {
+        $('telIngressMeta').textContent = `${ingress.bytes_human || '—'} total · ${ingress.utilization_pct != null ? ingress.utilization_pct + '% of shaped down' : 'util —'}`;
+      }
+      if ($('telEgressMeta')) {
+        $('telEgressMeta').textContent = `${egress.bytes_human || '—'} total · ${egress.utilization_pct != null ? egress.utilization_pct + '% of shaped up' : 'util —'}`;
+      }
+      if ($('telIngressUtil')) $('telIngressUtil').style.width = `${Math.min(ingress.utilization_pct || 0, 100)}%`;
+      if ($('telEgressUtil')) $('telEgressUtil').style.width = `${Math.min(egress.utilization_pct || 0, 100)}%`;
+
+      if ($('telShapedDown')) $('telShapedDown').textContent = qos.wan_down || '—';
+      if ($('telShapedUp')) $('telShapedUp').textContent = qos.wan_up || '—';
+      if ($('telLatency')) $('telLatency').textContent = lat.avg_ms != null ? `${lat.avg_ms} ms` : '—';
+      if ($('telLoss')) $('telLoss').textContent = lat.loss_pct != null ? `${lat.loss_pct}%` : '—';
+      if ($('telQdrops')) $('telQdrops').textContent = (upSh.dropped || 0) + (downSh.dropped || 0);
+      if ($('telOverlimits')) $('telOverlimits').textContent = (upSh.overlimits || 0) + (downSh.overlimits || 0);
+      if ($('telWanHint')) {
+        const liveTag = t.live ? ' · live' : '';
+        $('telWanHint').textContent = wan.sample_interval_sec || t.sample_interval_sec
+          ? `WAN ${wan.wan_if || 'eth1'} · ${(t.sample_interval_sec || wan.sample_interval_sec)}s window${liveTag} · ${t.ts || wan.ts || ''}`
+          : 'First sample recorded — rates appear on next poll.';
+      }
+
+      if ($('telOvIngress')) $('telOvIngress').textContent = inRate;
+      if ($('telOvEgress')) $('telOvEgress').textContent = outRate;
+      if ($('telOvLatency')) $('telOvLatency').textContent = lat.avg_ms != null ? `${lat.avg_ms} ms` : '—';
+      if ($('telOvQueue')) {
+        const qDown = (qRoot.queues || {}).ingress_download || {};
+        const qUp = (qRoot.queues || {}).egress_upload || {};
+        const grades = [qDown.buffer_grade, qUp.buffer_grade].filter(g => g && g !== 'unknown');
+        if (!grades.length) {
+          $('telOvQueue').innerHTML = '<span class="badge warn">pending</span>';
+        } else if (grades.some(g => g === 'poor')) {
+          $('telOvQueue').innerHTML = '<span class="badge bad">poor</span>';
+        } else if (grades.some(g => g === 'fair')) {
+          $('telOvQueue').innerHTML = '<span class="badge warn">fair</span>';
+        } else if (grades.every(g => g === 'excellent')) {
+          $('telOvQueue').innerHTML = '<span class="badge ok">excellent</span>';
+        } else {
+          $('telOvQueue').innerHTML = '<span class="badge ok">good</span>';
+        }
+      }
+
+      const devs = (t.devices && t.devices.devices) || [];
+      if ($('telDeviceRows')) renderTelDeviceRows(devs, t.device_history);
+      if ($('telDevHint')) {
+        const backend = (t.devices && t.devices.counter_backend) || 'none';
+        const ctr = (t.devices && t.devices.counters) || {};
+        let hint = `${devs.length} device(s) · source: ${backend}`;
+        if (backend === 'conntrack') hint += ' · active session bytes (resets when flows close)';
+        if (backend === 'nft') hint += ' · cumulative forward counters';
+        if (ctr.error) hint += ` · ERROR: ${ctr.error}`;
+        else if (backend === 'none') hint += ' · counters not loaded — try Refresh or re-apply QoS';
+        if (t.live) hint += ' · live';
+        hint += ` · ${(t.devices && t.devices.ts) || t.ts || ''}`;
+        $('telDevHint').textContent = hint;
+      }
+
+      const qDown = (qRoot.queues || {}).ingress_download || {};
+      const qUp = (qRoot.queues || {}).egress_upload || {};
+      renderQueueSide(qDown, 'telQDown');
+      renderQueueSide(qUp, 'telQUp');
+      if ($('telQueueHint')) {
+        const ping = (qRoot.latency || {}).avg_ms;
+        const interval = qRoot.sample_interval_sec || t.sample_interval_sec;
+        $('telQueueHint').textContent = interval
+          ? `Sampled over ${interval}s · shaped rate from QoS config · ICMP ${ping != null ? ping + ' ms' : '—'}`
+          : 'First sample recorded — refresh again for interval grades and overlimit deltas.';
+      }
+
+      if (includeHistogram) {
+        const hist = t.history || {};
+        if ($('telHistWindow')) {
+          $('telHistWindow').textContent = hist.sample_count
+            ? `${hist.sample_count} samples · ~${hist.window_minutes || 0} min window`
+            : 'Building history…';
+        }
+        renderHistStats('telHistIngressStats', hist.ingress);
+        renderHistStats('telHistEgressStats', hist.egress);
+        renderHistogram('telHistIngress', hist.ingress, false);
+        renderHistogram('telHistEgress', hist.egress, true);
+      }
+    }
+
+    const TEL_STREAM_INTERVAL = 0.5;
+    let telEventSource = null;
+    let telStreamSeq = 0;
+    let telStreamRetryTimer = null;
+
+    function telemetryStreamUrl() {
+      const t = localStorage.getItem(tokenKey) || $('token').value.trim();
+      const ip = telSelectedIp || localStorage.getItem(telDeviceKey) || '';
+      const params = [`interval=${TEL_STREAM_INTERVAL}`];
+      if (t) params.push('token=' + encodeURIComponent(t));
+      if (ip) params.push('device=' + encodeURIComponent(ip));
+      return '/api/v1/telemetry/stream?' + params.join('&');
+    }
+
+    function stopTelemetryStream() {
+      if (telStreamRetryTimer) {
+        clearTimeout(telStreamRetryTimer);
+        telStreamRetryTimer = null;
+      }
+      if (telEventSource) {
+        telEventSource.close();
+        telEventSource = null;
+      }
+    }
+
+    function startTelemetryStream() {
+      if (!$('telIngressRate') && !$('telOvIngress')) return;
+      const t = localStorage.getItem(tokenKey) || $('token').value.trim();
+      if (!t) return;
+
+      stopTelemetryStream();
+      const seq = ++telStreamSeq;
+      const es = new EventSource(telemetryStreamUrl());
+      telEventSource = es;
+
+      es.onmessage = (ev) => {
+        if (seq !== telStreamSeq) return;
+        try {
+          const payload = JSON.parse(ev.data);
+          applyTelemetryPayload(payload, { includeHistogram: !!payload.history });
+          if ($('lastUpdated')) {
+            $('lastUpdated').textContent = 'Live · ' + new Date().toLocaleTimeString([], {
+              hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 1,
+            });
+            $('lastUpdated').classList.add('live');
+          }
+        } catch (e) {
+          if ($('telWanHint')) $('telWanHint').textContent = 'Telemetry parse error — ' + e.message;
+        }
+      };
+
+      es.onerror = () => {
+        if (seq !== telStreamSeq) return;
+        es.close();
+        if (telEventSource === es) telEventSource = null;
+        if ($('telWanHint')) $('telWanHint').textContent = 'Stream disconnected — reconnecting…';
+        telStreamRetryTimer = setTimeout(() => {
+          if (seq === telStreamSeq) startTelemetryStream();
+        }, 1500);
+      };
+    }
+
+    function startTelemetryLive() {
+      startTelemetryStream();
+    }
+
+    async function refreshTelemetryFull() {
+      try {
+        const ip = telSelectedIp || localStorage.getItem(telDeviceKey) || '';
+        let url = '/api/v1/telemetry/summary';
+        if (ip) url += '?device=' + encodeURIComponent(ip);
+        const t = await api(url);
+        applyTelemetryPayload(t, { includeHistogram: true });
+      } catch (e) {
+        if ($('telWanHint')) $('telWanHint').textContent = 'Telemetry unavailable — ' + e.message;
+      }
+    }
+
+    async function refreshTelemetry() {
+      return refreshTelemetryFull();
+    }
+
+    async function refreshPerf() {
+      if (!$('perfCc')) return;
+      try {
+        const p = await api('/api/v1/perf/status');
+        const k = p.kernel || {};
+        const cc = k.congestion_control || '—';
+        setText(['perfCc', 'perfCcG'], cc);
+        const buf = String(p.buffer_profile || 'normal');
+        const bufHtml = buf.includes('kick') || buf.includes('desync')
+          ? `<span class="badge warn">${buf.split(' ')[0]}</span>` : `<span class="badge ok">${buf.split(' ')[0] || 'normal'}</span>`;
+        setHtml(['perfBuffer', 'perfBufferG'], bufHtml);
+        const dscp = String(p.dscp || '');
+        const dscpHtml = dscp.includes('active=true') || dscp.includes('ef') ? '<span class="badge ok">EF</span>' : '<span class="badge warn">off</span>';
+        setHtml(['perfDscp', 'perfDscpG'], dscpHtml);
+        const g = p.gpu || {};
+        const gpuHtml = g.reachable && g.cuda ? `<span class="badge ok">CUDA</span>`
+          : (g.reachable ? `<span class="badge warn">CPU</span>` : '<span class="badge bad">offline</span>');
+        setHtml(['perfGpu', 'perfGpuG'], gpuHtml);
+        const q = await api('/api/v1/qos/status');
+        const qm = q.mode || '—';
+        const up = (q.tc && q.tc.upload) ? `${qm} · ${q.tc.upload.replace('qdisc ', '')}` : qm;
+        const down = (q.tc && q.tc.download) ? q.tc.download.replace('qdisc ', '') : '—';
+        setText(['perfQosUp', 'perfQosUpG'], up);
+        setText(['perfQosDown', 'perfQosDownG'], down);
+      } catch (e) { setText(['perfCc', 'perfCcG'], 'error'); }
+    }
+
+    async function refreshSecurity() {
+      if (!$('idsMode')) return;
+      try {
+        const s = await api('/api/v1/ids/summary');
+        $('idsMode').innerHTML = s.mode === 'log_only'
+          ? '<span class="badge ok">Log only</span>' : `<span class="badge warn">${s.mode || '—'}</span>`;
+        $('idsLastScan').textContent = s.last_scan || '—';
+        $('idsFlowCount').textContent = s.flow_count != null ? s.flow_count : '—';
+        $('idsEventTotal').textContent = s.total_events != null ? s.total_events : '0';
+        $('idsHighCount').textContent = (s.event_counts && s.event_counts.high) || '0';
+        const aiRaw = s.ai || {};
+        const ai = aiRaw.assessment || {};
+        const verdict = (ai.verdict || (ai.risk_score != null ? (ai.risk_score >= 70 ? 'elevated' : 'normal') : '—'));
+        const vCls = verdict === 'high' || verdict === 'elevated' ? 'bad' : (verdict === 'medium' ? 'warn' : 'ok');
+        $('idsAiVerdict').innerHTML = verdict === '—'
+          ? (aiRaw.reachable === false ? '<span class="badge bad">offline</span>'
+            : aiRaw.error === 'inference_timeout' ? '<span class="badge warn">queued</span>'
+            : '<span class="badge warn">pending</span>')
+          : `<span class="badge ${vCls}">${verdict}</span>`;
+        if (ai.summary || ai.priority_notes) {
+          $('idsAiSummary').textContent = ai.summary || ai.priority_notes;
+        } else if (aiRaw.error === 'inference_timeout') {
+          $('idsAiSummary').textContent = aiRaw.detail || 'Ollama is reachable but inference timed out — GPU busy on .221 (gh-inbox fleet). NIST heuristics still logged.';
+        } else if (aiRaw.reachable === false) {
+          $('idsAiSummary').textContent = aiRaw.error || 'Cannot reach IDS Ollama at node9 (.62:11434)';
+        } else {
+          $('idsAiSummary').textContent = 'Run Scan now to analyze live flows with NIST rules + AI.';
+        }
+
+        const rows = (s.highlights || []).map(e => {
+          const sev = e.severity || 'info';
+          const sevCls = sev === 'high' ? 'bad' : (sev === 'medium' ? 'warn' : 'ok');
+          return `<tr>
+            <td class="mono">${(e.ts || '').replace('T', ' ').replace('Z', '')}</td>
+            <td><span class="badge ${sevCls}">${sev}</span></td>
+            <td>${e.title || '—'}<div class="sub">${e.detail || ''}</div></td>
+            <td class="mono">${e.device_label || e.device_ip || '—'}</td>
+            <td class="mono">${e.nist_id || '—'}</td>
+          </tr>`;
+        }).join('');
+        $('idsHighlightRows').innerHTML = rows || '<tr><td colspan="5" class="sub">No suspicious activity logged.</td></tr>';
+
+        const pr = s.priority || {};
+        const labels = pr.labels || {};
+        const order = pr.order || ['xbox', 'wireless', 'laptop', 'phone', 'other'];
+        $('idsPriorityStack').innerHTML = order.map(k => `<li>${labels[k] || k} <span class="sub">(${(pr.counts || {})[k] || 0})</span></li>`).join('');
+        const prioRows = [];
+        for (const tier of order) {
+          for (const d of ((pr.devices || {})[tier] || [])) {
+            prioRows.push(`<tr><td>${tierBadge(tier)}</td><td>${d.label || '—'}</td><td class="mono">${d.ip || '—'}</td><td></td></tr>`);
+          }
+        }
+        $('idsPriorityRows').innerHTML = prioRows.length
+          ? prioRows.join('')
+          : '<tr><td colspan="4" class="sub">No classified devices — run Scan devices on Overview.</td></tr>';
+
+        const nist = s.nist_catalog || [];
+        $('idsNistRules').innerHTML = nist.map(r => policyCard(`${r.id} · ${r.title}`, {
+          label: r.framework || 'NIST',
+          detail: `${r.description || ''} Signals: ${(r.signals || []).join(', ')}`,
+        })).join('');
+      } catch (e) {
+        if ($('idsAiSummary')) $('idsAiSummary').textContent = 'Security module unavailable — ' + e.message;
+      }
+    }
+
+    async function refreshSentinel() {
+      if (!$('sentVerdict')) return;
+      try {
+        const s = await api('/api/v1/sentinel/summary');
+        const live = s.ok !== false && !s.error;
+        const statusHtml = live ? `<span class="badge ok">${s.mode || 'watching'}</span>` : `<span class="badge bad">${s.error || 'offline'}</span>`;
+        setHtml(['sentSentinelStatus', 'sentSentinelStatusG'], statusHtml);
+        const v = (s.verdict || '—').toUpperCase();
+        const vClass = v.includes('CRITICAL') || v.includes('LIKELY') ? 'bad' : (v.includes('POSSIBLE') ? 'warn' : 'ok');
+        const verdictHtml = v === '—' ? '—' : `<span class="badge ${vClass}">${v}</span>`;
+        setHtml(['sentVerdict', 'sentVerdictG'], verdictHtml);
+        setText(['sentPhase', 'sentPhaseG'], s.phase || '—');
+        setText(['sentConns', 'sentConnsG'], s.connections != null ? s.connections : '—');
+        const ng = s.network_guard || {};
+        const guardHtml = ng.packet_shield_active
+          ? `<span class="badge warn">${ng.mitigation || 'shield'}</span>` : `<span class="badge ok">${ng.mitigation || 'standby'}</span>`;
+        $('sentGuard').innerHTML = guardHtml;
+        $('sentPollsXbox').textContent = `${s.polls != null ? s.polls : '—'} · ${s.xbox_ip || '—'}`;
+      } catch (e) { setHtml(['sentSentinelStatus', 'sentSentinelStatusG'], '<span class="badge bad">error</span>'); }
+    }
+
+    async function refreshNat() {
+      try {
+        const n = await api('/api/v1/nat/status');
+        const dmz = n.dmz || {};
+        $('dmzEnabled').checked = !!dmz.enabled;
+        $('dmzHostIp').value = dmz.host_ip || '';
+        $('dmzName').value = dmz.name || 'xbox';
+        $('dmzWarn').style.display = dmz.enabled ? 'block' : 'none';
+        $('dmzState').innerHTML = dmz.enabled
+          ? `<span class="badge warn">${dmz.name || 'host'} · ${dmz.host_ip || '?'}</span>`
+          : '<span class="badge ok">off</span>';
+        $('pfCount').textContent = String(n.port_forward_count ?? 0);
+        const up = n.upnp || {};
+        $('upnpEnabled').checked = up.enabled !== false;
+        $('upnpSecure').checked = !!up.secure_mode;
+        $('upnpState').innerHTML = up.enabled
+          ? (up.running ? '<span class="badge ok">running</span>' : '<span class="badge bad">stopped</span>')
+          : '<span class="badge warn">disabled</span>';
+        $('upnpLeaseCount').textContent = String(up.lease_count ?? 0);
+        const pfBody = $('pfTable');
+        pfBody.innerHTML = '';
+        (n.port_forwards || []).forEach(row => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${row.name || row.id}</td><td class="mono">${row.proto}</td><td class="mono">${row.wan_port}</td><td class="mono">${row.lan_ip}:${row.lan_port}</td><td>${row.source || 'manual'}</td><td><button class="sm" data-pf-del="${row.id}">Remove</button></td>`;
+          pfBody.appendChild(tr);
+        });
+        pfBody.querySelectorAll('[data-pf-del]').forEach(btn => {
+          btn.onclick = async () => {
+            try {
+              await api('/api/v1/nat/port-forwards/remove', { method: 'POST', body: JSON.stringify({ id: btn.dataset.pfDel }) });
+              await refreshNat();
+            } catch (e) { showError(e.message); }
+          };
+        });
+        const upBody = $('upnpLeases');
+        upBody.innerHTML = '';
+        (up.leases || []).forEach(row => {
+          const tr = document.createElement('tr');
+          const desc = row.desc || row.description || row.comment || '—';
+          tr.innerHTML = `<td>${desc}</td><td class="mono">${row.proto || row.protocol || '—'}</td><td class="mono">${row.ext_port || row.external_port || '—'}</td><td class="mono">${row.int_client || row.internal_client || '—'}</td><td class="mono">${row.int_port || row.internal_port || '—'}</td><td>upnp</td>`;
+          upBody.appendChild(tr);
+        });
+        if (!(up.leases || []).length) {
+          upBody.innerHTML = '<tr><td colspan="6" class="muted">No active UPnP mappings</td></tr>';
+        }
+      } catch (e) { /* NAT panel optional until deployed */ }
+    }
+
+    async function refreshDhcp() {
+      const d = await api('/api/v1/dhcp');
+      $('dhcpState').innerHTML = d.effective
+        ? `<span class="badge ok">${d.lease_count} lease(s)</span>`
+        : `<span class="badge ${d.enabled ? 'warn' : 'bad'}">${d.enabled ? 'stopped' : 'off'}</span>`;
+      fillDhcpForm(d.config || {});
+      renderDhcpLeases(d.leases || []);
+      renderReservations((d.config || {}).reservations || []);
+    }
+
+    let refreshInFlight = false;
+
+    async function refresh() {
+      if (refreshInFlight) return;
+      const t = localStorage.getItem(tokenKey) || $('token').value.trim();
+      if (!t) { showError('Paste API token and click Connect'); return; }
+      refreshInFlight = true;
+      showError('');
+      try {
+        const status = await api('/api/v1/firewall/status');
+        $('policy').innerHTML = '<span class="badge ok">Default deny · NAT</span>';
+        const role = status.role || 'lab';
+        const cut = status.cutover ? 'LIVE' : 'staged';
+        $('modeState').innerHTML = role === 'gateway'
+          ? `<span class="badge ${status.cutover ? 'ok' : 'warn'}">${cut}</span>`
+          : '<span class="badge warn">lab</span>';
+        $('roleLabel').textContent = status.cutover ? 'Gateway — network exit'
+          : (role === 'gateway' ? 'Gateway staged' : 'Lab bench');
+        $('allowedCount').textContent = `${(status.allowed_macs || []).length} approved · ${status.quarantine_count ?? 0} quarantined`;
+        $('natState').innerHTML = status.nat ? '<span class="badge ok">ON</span>' : '<span class="badge bad">OFF</span>';
+        const inbound = status.inbound_nat || {};
+        if (inbound.dmz && inbound.dmz.enabled && $('natState')) {
+          $('natState').innerHTML += ` <span class="badge warn">DMZ ${inbound.dmz.host_ip || ''}</span>`;
+        }
+        if (inbound.upnp && inbound.upnp.enabled && $('natState')) {
+          $('natState').innerHTML += ` <span class="badge ok">UPnP</span>`;
+        }
+        const shield = status.packet_shield || {};
+        $('shieldState').innerHTML = shield.active ? `<span class="badge warn">${shield.mode || 'on'}</span>` : '<span class="badge ok">off</span>';
+        await Promise.all([
+          refreshSentinel(),
+          refreshPerf(),
+          refreshStability(),
+          refreshFolding(),
+          refreshDhcp(),
+          refreshNat(),
+          refreshSecurity(),
+        ]);
+        const [grp, dev] = await Promise.all([
+          api('/api/v1/groups'),
+          api('/api/v1/devices'),
+        ]);
+        renderGroups(grp.groups || []);
+        renderDevices(dev.devices || [], grp.groups || []);
+        if ($('lastUpdated')) $('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+      } catch (e) { showError(e.message === 'unauthorized' ? 'Invalid API token' : e.message); }
+      finally { refreshInFlight = false; }
+    }
+
+    /* ── Event bindings ── */
+    on('dhcpSave', async () => {
+      try {
+        await api('/api/v1/dhcp/config', { method: 'POST', body: JSON.stringify({
+          enabled: $('dhcpEnabled').checked, interface: $('dhcpIf').value.trim(),
+          range_start: $('dhcpStart').value.trim(), range_end: $('dhcpEnd').value.trim(),
+          lease_time: $('dhcpLease').value.trim(), gateway: $('dhcpGw').value.trim(),
+          dns: $('dhcpDns').value.trim(), domain: $('dhcpDomain').value.trim(),
+          upstream_dns: $('dhcpUpstream').value.split(',').map(s => s.trim()).filter(Boolean),
+        })});
+        await refresh();
+      } catch (e) { showError(e.message); }
+    });
+    on('dhcpRestart', async () => { try { await api('/api/v1/dhcp/restart', { method: 'POST', body: '{}' }); await refresh(); } catch (e) { showError(e.message); } });
+    on('dmzSave', async () => {
+      try {
+        await api('/api/v1/nat/dmz', { method: 'POST', body: JSON.stringify({
+          enabled: $('dmzEnabled').checked,
+          host_ip: $('dmzHostIp').value.trim(),
+          name: $('dmzName').value.trim() || 'dmz',
+        })});
+        await refreshNat();
+      } catch (e) { showError(e.message); }
+    });
+    on('natXboxDmz', async () => {
+      try {
+        await api('/api/v1/nat/xbox-dmz', { method: 'POST', body: '{}' });
+        await refreshNat();
+      } catch (e) { showError(e.message); }
+    });
+    on('natXboxPreset', async () => {
+      try {
+        await api('/api/v1/nat/xbox-preset', { method: 'POST', body: '{}' });
+        await refreshNat();
+      } catch (e) { showError(e.message); }
+    });
+    on('natReload', async () => {
+      try { await api('/api/v1/firewall/reload', { method: 'POST', body: '{}' }); await refreshNat(); }
+      catch (e) { showError(e.message); }
+    });
+    on('upnpSave', async () => {
+      try {
+        await api('/api/v1/nat/upnp', { method: 'POST', body: JSON.stringify({
+          enabled: $('upnpEnabled').checked,
+          secure_mode: $('upnpSecure').checked,
+        })});
+        await refreshNat();
+      } catch (e) { showError(e.message); }
+    });
+    on('pfAdd', async () => {
+      try {
+        const wan = parseInt($('pfWan').value, 10);
+        const lan = parseInt($('pfLan').value, 10) || wan;
+        await api('/api/v1/nat/port-forwards/add', { method: 'POST', body: JSON.stringify({
+          name: $('pfName').value.trim() || `forward-${wan}`,
+          proto: $('pfProto').value,
+          wan_port: wan,
+          lan_ip: $('pfLanIp').value.trim(),
+          lan_port: lan,
+        })});
+        $('pfName').value = ''; $('pfWan').value = ''; $('pfLan').value = ''; $('pfLanIp').value = '';
+        await refreshNat();
+      } catch (e) { showError(e.message); }
+    });
+    on('resAdd', async () => {
+      try {
+        await api('/api/v1/dhcp/reservations/add', { method: 'POST', body: JSON.stringify({
+          mac: $('resMac').value.trim(), ip: $('resIp').value.trim(), hostname: $('resHost').value.trim() || undefined,
+        })});
+        $('resMac').value = ''; $('resIp').value = ''; $('resHost').value = '';
+        await refresh();
+      } catch (e) { showError(e.message); }
+    });
+    on('saveToken', () => { localStorage.setItem(tokenKey, $('token').value.trim()); refresh(); startTelemetryStream(); });
+    on('refresh', refresh);
+    on('telRefresh', async () => { startTelemetryStream(); await refreshTelemetryFull(); });
+    on('idsScan', async () => {
+      try {
+        $('idsAiSummary').textContent = 'Scanning flows…';
+        await api('/api/v1/ids/scan', { method: 'POST', body: '{}' });
+        await refreshSecurity();
+      } catch (e) { showError(e.message); }
+    });
+    on('idsApplyQos', async () => {
+      try {
+        await api('/api/v1/qos/apply', { method: 'POST', body: '{}' });
+        showError('Priority QoS applied'); setTimeout(() => showError(''), 2500);
+        await refreshSecurity();
+      } catch (e) { showError(e.message); }
+    });
+    on('discover', async () => { try { await api('/api/v1/firewall/discover', { method: 'POST', body: '{}' }); await refresh(); } catch (e) { showError(e.message); } });
+    on('reloadRules', async () => { try { await api('/api/v1/firewall/reload', { method: 'POST', body: '{}' }); await refresh(); } catch (e) { showError(e.message); } });
+    onAll(['shieldOn', 'shieldOnG'], async () => { try { await api('/api/v1/shield/enable', { method: 'POST', body: JSON.stringify({ level: 'normal' }) }); await refresh(); } catch (e) { showError(e.message); } });
+    onAll(['shieldOff', 'shieldOffG'], async () => { try { await api('/api/v1/shield/relax', { method: 'POST', body: '{}' }); await refresh(); } catch (e) { showError(e.message); } });
+    onAll(['sentinelOpen', 'sentinelOpenG'], () => window.open(`http://${location.hostname}:8098/v1/dashboard`, '_blank', 'noopener'));
+    onAll(['sentinelSync', 'sentinelSyncG'], async () => { try { await api('/api/v1/sentinel/sync', { method: 'POST', body: JSON.stringify({ restart: true }) }); await refresh(); } catch (e) { showError(e.message); } });
+    on('foldProbe', async () => {
+      try {
+        await api('/api/v1/folding/filter/cpu', { method: 'POST', body: JSON.stringify({ payload: JSON.stringify({ probe: true, ts: Date.now() }) }) });
+        await refresh();
+        showError('Fold probe complete'); setTimeout(() => showError(''), 2500);
+      } catch (e) { showError(e.message); }
+    });
+    on('foldResetStats', async () => {
+      try {
+        await api('/api/v1/folding/stats/reset', { method: 'POST', body: '{}' });
+        await refresh();
+        showError('Folding stats reset'); setTimeout(() => showError(''), 2500);
+      } catch (e) { showError(e.message); }
+    });
+    onAll(['perfApply', 'perfApplyG'], async () => {
+      try {
+        await api('/api/v1/stability/apply', { method: 'POST', body: JSON.stringify({ autorate_first: false }) });
+        await refresh();
+      } catch (e) { showError(e.message); }
+    });
+    on('stabilityApply', async () => {
+      try {
+        if ($('qosHint')) $('qosHint').textContent = 'Applying stability stack…';
+        await api('/api/v1/stability/apply', { method: 'POST', body: JSON.stringify({ autorate_first: true }) });
+        await refresh();
+        showError('Stability stack applied'); setTimeout(() => showError(''), 3000);
+      } catch (e) { showError(e.message); }
+    });
+    on('qosAutorate', async () => {
+      try {
+        if ($('qosHint')) $('qosHint').textContent = 'Measuring bandwidth (~20s)…';
+        const factor = parseFloat($('autorateFactor').value) || 0.95;
+        const r = await api('/api/v1/qos/autorate', { method: 'POST', body: JSON.stringify({ factor, apply: true }) });
+        await refresh();
+        if ($('qosHint')) {
+          $('qosHint').textContent = r.measurement
+            ? `Autorate done: ${r.measurement.wan_up} up · ${r.measurement.wan_down} down`
+            : 'Autorate complete';
+        }
+      } catch (e) { showError(e.message); if ($('qosHint')) $('qosHint').textContent = e.message; }
+    });
+    on('qosSaveBw', async () => {
+      try {
+        await api('/api/v1/qos/bandwidth', {
+          method: 'POST',
+          body: JSON.stringify({ wan_up: $('wanUp').value.trim(), wan_down: $('wanDown').value.trim(), apply: true }),
+        });
+        await refresh();
+        showError('Bandwidth saved'); setTimeout(() => showError(''), 2500);
+      } catch (e) { showError(e.message); }
+    });
+    onAll(['perfRefresh', 'perfRefreshG'], refreshPerf);
+    onAll(['prepareGateway', 'cutoverPrepare'], async () => {
+      try { await api('/api/v1/cutover/prepare', { method: 'POST', body: '{}' }); await refresh(); showError('Gateway staged'); setTimeout(() => showError(''), 4000); }
+      catch (e) { showError(e.message); }
+    });
+    on('cutoverPreflight', async () => {
+      try {
+        const p = await api('/api/v1/cutover/preflight');
+        $('cutoverChecks').innerHTML = (p.checks || []).map(c => `<div>${c.ok ? '✓' : '✗'} <strong>${c.name}</strong> — ${c.detail}</div>`).join('') || 'All checks passed.';
+        if (!p.ok) showError('Preflight failed');
+        else showError('');
+      } catch (e) { showError(e.message); }
+    });
+    on('cutoverBackup', async () => {
+      try { const r = await api('/api/v1/cutover/backup', { method: 'POST', body: '{}' }); showError('Backup: ' + (r.backup || 'ok')); setTimeout(() => showError(''), 4000); }
+      catch (e) { showError(e.message); }
+    });
+    on('grpCreate', async () => {
+      try {
+        const id = $('grpId').value.trim();
+        if (!id) { showError('Group ID required'); return; }
+        await api('/api/v1/groups/create', { method: 'POST', body: JSON.stringify({
+          id, name: $('grpName').value.trim() || id,
+          config: { internet: $('grpInternet').value, qos_profile: $('grpQos').value, packet_shield: $('grpShield').value, dns_filter: $('grpDns').value },
+        })});
+        $('grpId').value = ''; $('grpName').value = '';
+        await refresh();
+      } catch (e) { showError(e.message); }
+    });
+    on('grpApplyAll', async () => {
+      try {
+        const r = await api('/api/v1/groups/apply-all', { method: 'POST', body: '{}' });
+        const n = (r.results || []).reduce((a, x) => a + (x.applied || 0), 0);
+        showError(`Applied to ${n} device(s)`); setTimeout(() => showError(''), 3000);
+        await refresh();
+        if (activeGroupId) await openGroupDetail(activeGroupId);
+      } catch (e) { showError(e.message); }
+    });
+    on('groupModalApply', async () => {
+      if (!activeGroupId) return;
+      try {
+        const r = await api(`/api/v1/groups/${activeGroupId}/apply`, { method: 'POST', body: '{}' });
+        showError(`Applied to ${r.applied} device(s)`); setTimeout(() => showError(''), 3000);
+        await refresh(); await openGroupDetail(activeGroupId);
+      } catch (e) { showError(e.message); }
+    });
+
+    $('token').value = localStorage.getItem(tokenKey) || '';
+    setInterval(() => { $('clock').textContent = new Date().toLocaleString(); }, 1000);
+    bindSortHeaders();
+    bindTelSortHeaders();
+    refresh();
+    startTelemetryLive();
+    setInterval(refresh, 30000);
+  </script>
+</body>
+</html>

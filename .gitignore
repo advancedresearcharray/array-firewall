@@ -1,0 +1,29 @@
+# Secrets and live runtime state
+*.token
+api.token
+*.env
+!*.env.example
+admin.env
+/root/.secrets/
+
+# Live policy/device data (use *.example in repo)
+policies.json
+devices.json
+ruleset.nft
+probed-hostnames.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+*.swp
+*~
+
+# Build / deploy artifacts
+*.pyc
+/tmp/

@@ -1,0 +1,15 @@
+[Unit]
+Description=array-firewall GPU packet analyzer
+After=network.target
+
+[Service]
+Type=simple
+Environment=CUDA_VISIBLE_DEVICES=0
+Environment=GPU_PERF_PORT=8795
+ExecStart=/usr/bin/python3 %h/opt/array-firewall-gpu/analyze_server.py
+Restart=on-failure
+RestartSec=3
+WorkingDirectory=%h/opt/array-firewall-gpu
+
+[Install]
+WantedBy=default.target

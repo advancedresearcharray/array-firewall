@@ -1,0 +1,24 @@
+#!/usr/sbin/nft -f
+# array-firewall baseline — management input filter + locked forward (lab rules added by ctl).
+
+flush ruleset
+
+table inet filter {
+	chain input {
+		type filter hook input priority filter; policy drop;
+		iif "lo" accept
+		ct state established,related accept
+		ip saddr 192.168.167.0/24 tcp dport { 22, 8098 } accept
+		ip saddr 192.168.167.0/24 icmp type echo-request accept
+		ip saddr 10.99.0.0/24 icmp type echo-request accept
+	}
+
+	chain forward {
+		type filter hook forward priority filter; policy drop;
+		ct state established,related accept
+	}
+
+	chain output {
+		type filter hook output priority filter; policy accept;
+	}
+}

@@ -1,0 +1,13 @@
+[Unit]
+Description=array-firewall — apply NAT + MAC allowlist rules
+After=network-online.target
+Wants=network-online.target
+Before=array-firewall-api.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/array-firewall/scripts/apply-firewall.sh
+
+[Install]
+WantedBy=multi-user.target

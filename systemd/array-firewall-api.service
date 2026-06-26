@@ -1,0 +1,17 @@
+[Unit]
+Description=array-firewall API and dashboard
+After=network-online.target array-firewall.service dnsmasq.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/array-firewall/api
+Environment=PYTHONPATH=/opt/array-firewall/api
+Environment=ARRAY_FW_API_PORT=8090
+Environment=ARRAY_FW_BIND=0.0.0.0
+ExecStart=/usr/bin/python3 /opt/array-firewall/api/server.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

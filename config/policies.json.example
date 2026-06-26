@@ -1,0 +1,237 @@
+{
+  "version": 1,
+  "network": {
+    "role": "gateway",
+    "cutover": false,
+    "hostname": "array-firewall",
+    "lan_if": "eth0",
+    "wan_if": "eth1",
+    "uplink_if": "eth1",
+    "lan_cidr": "192.168.167.0/24",
+    "mgmt_cidr": "192.168.167.0/24",
+    "gateway_ip": "192.168.167.1",
+    "default_posture": "deny_new_devices",
+    "unsolicited_wan": "deny",
+    "nat": true
+  },
+  "zones": {
+    "enabled": true,
+    "google_router_ip": "192.168.167.2",
+    "wireless": {
+      "groups": ["google-mesh", "wireless-infra"],
+      "ip_ranges": ["192.168.167.3-192.168.167.50"]
+    },
+    "trusted": {
+      "groups": ["infrastructure", "gaming", "laptops"],
+      "ip_ranges": ["192.168.167.51-192.168.167.250"]
+    },
+    "bridge": {
+      "groups": ["bridge", "laptops"],
+      "macs": []
+    },
+    "allow": {
+      "gateway_dns": true,
+      "wireless_internet": true,
+      "trusted_internet": true
+    }
+  },
+  "defaults": {
+    "internet": "deny_until_approved",
+    "dns_filter": "off",
+    "qos_profile": "balanced",
+    "log_denied": true
+  },
+  "dhcp": {
+    "enabled": true,
+    "interface": "eth0",
+    "range_start": "10.99.0.50",
+    "range_end": "10.99.0.200",
+    "netmask": "255.255.255.0",
+    "lease_time": "12h",
+    "gateway": "192.168.167.1",
+    "dns": "192.168.167.1",
+    "domain": "array-firewall.local",
+    "upstream_dns": ["1.1.1.1", "8.8.8.8"],
+    "authoritative": true,
+    "reservations": []
+  },
+  "qos_profiles": {
+    "low": { "description": "Proxmox / LXC / VM / mesh — deprioritized" },
+    "balanced": { "description": "Default house traffic — medium priority" },
+    "gaming": { "description": "Xbox / Warzone — dedicated bandwidth" }
+  },
+  "qos": {
+    "enabled": true,
+    "wan_if": "eth1",
+    "lan_if": "eth0",
+    "wan_up": "950mbit",
+    "wan_down": "950mbit",
+    "contract_up": "1000mbit",
+    "contract_down": "1000mbit",
+    "sync": true,
+    "xbox_ip": "192.168.167.65",
+    "xbox_rate": "874mbit",
+    "marks": {
+      "xbox": 16,
+      "wireless": 20,
+      "laptop": 32,
+      "phone": 40,
+      "other": 48,
+      "high": 16,
+      "medium": 32,
+      "low": 48
+    },
+    "classes": {
+      "xbox": { "rate": "400mbit", "ceil": "931mbit", "prio": 1 },
+      "wireless": { "rate": "200mbit", "ceil": "836mbit", "prio": 2 },
+      "laptop": { "rate": "150mbit", "ceil": "700mbit", "prio": 3 },
+      "phone": { "rate": "100mbit", "ceil": "500mbit", "prio": 4 },
+      "other": { "rate": "50mbit", "ceil": "200mbit", "prio": 5 },
+      "high": { "rate": "400mbit", "ceil": "931mbit", "prio": 1 },
+      "medium": { "rate": "150mbit", "ceil": "700mbit", "prio": 3 },
+      "low": { "rate": "50mbit", "ceil": "200mbit", "prio": 5 }
+    },
+    "mode": "auto",
+    "autorate_recommended": false
+  },
+  "devices": {},
+  "device_groups": {
+    "infrastructure": {
+      "name": "Infrastructure",
+      "description": "Servers, LXCs, and VMs",
+      "members": [],
+      "config": {
+        "internet": "allowed",
+        "qos_profile": "low",
+        "dns_filter": "off",
+        "packet_shield": "off"
+      }
+    },
+    "iot": {
+      "name": "IoT",
+      "description": "Smart home and sensors",
+      "members": [],
+      "config": {
+        "internet": "allowed",
+        "qos_profile": "balanced",
+        "dns_filter": "off",
+        "packet_shield": "off"
+      }
+    },
+    "gaming": {
+      "name": "Gaming",
+      "description": "Xbox and gaming clients",
+      "members": [],
+      "config": {
+        "internet": "allowed",
+        "qos_profile": "high",
+        "dns_filter": "off",
+        "packet_shield": "normal",
+        "dhcp_allocate": true
+      }
+    },
+    "google-mesh": {
+      "name": "Google Mesh",
+      "description": "Nest/Google Wifi — DHCP from Google router at .2 (wireless zone)",
+      "members": [],
+      "config": {
+        "internet": "allowed",
+        "qos_profile": "high",
+        "dns_filter": "off",
+        "packet_shield": "off",
+        "dhcp_allocate": false
+      }
+    },
+    "bridge": {
+      "name": "Zone bridge",
+      "description": "Devices allowed to cross wireless ↔ trusted barrier (e.g. admin laptop)",
+      "members": [],
+      "config": {
+        "internet": "allowed",
+        "qos_profile": "balanced",
+        "dns_filter": "off",
+        "packet_shield": "off",
+        "dhcp_allocate": true
+      }
+    },
+    "wireless-infra": {
+      "name": "Wireless infrastructure",
+      "description": "Access points, mesh nodes, routers",
+      "members": [],
+      "config": {
+        "internet": "allowed",
+        "qos_profile": "high",
+        "dns_filter": "off",
+        "packet_shield": "off",
+        "dhcp_allocate": false
+      }
+    },
+    "laptops": {
+      "name": "Laptops",
+      "description": "Admin and household laptops (priority 3)",
+      "members": [],
+      "config": {
+        "internet": "allowed",
+        "qos_profile": "balanced",
+        "dns_filter": "off",
+        "packet_shield": "off"
+      }
+    },
+    "phones": {
+      "name": "Phones",
+      "description": "Mobile devices (priority 4)",
+      "members": [],
+      "config": {
+        "internet": "allowed",
+        "qos_profile": "balanced",
+        "dns_filter": "off",
+        "packet_shield": "off"
+      }
+    }
+  },
+  "ids": {
+    "enabled": true,
+    "mode": "log_only",
+    "scan_interval_sec": 30,
+    "ai_enabled": true,
+    "ollama_url": "http://192.168.167.62:11434",
+    "ollama_model": "llama3.2:1b",
+    "connection_spike_threshold": 80,
+    "port_scan_threshold": 12
+  },
+  "port_forwards": [],
+  "dmz": {
+    "enabled": false,
+    "host_ip": "192.168.167.65",
+    "host_mac": "28:ea:0b:75:3b:75",
+    "name": "xbox"
+  },
+  "upnp": {
+    "enabled": true,
+    "secure_mode": false,
+    "lease_seconds": 3600,
+    "allow_lan": true
+  },
+  "blocklists": {
+    "dns": [],
+    "nft": []
+  },
+  "gaming": {
+    "xbox_ip": "192.168.167.65",
+    "xbox_mac": "28:ea:0b:75:3b:75",
+    "packet_shield_in_match_only": true,
+    "sentinel_port": 8098
+  },
+  "perf": {
+    "enabled": true,
+    "gpu_enabled": true,
+    "gpu_url": "http://192.168.167.221:8795",
+    "dscp_gaming": true,
+    "buffer_profiles": true,
+    "kernel_tune": true,
+    "autorate_on_boot": false,
+    "autorate_before_apply": false,
+    "autorate_factor": 0.95
+  },
+  "custom_hooks": []
+}
