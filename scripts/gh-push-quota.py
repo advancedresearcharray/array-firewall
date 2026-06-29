@@ -20,7 +20,7 @@ def fetch_push_timestamps() -> list[str]:
         [
             "gh",
             "api",
-            f"/users/{USER}/events/public",
+            f"/users/{USER}/events",
             "--paginate",
             "-q",
             '.[] | select(.type=="PushEvent") | .created_at',
