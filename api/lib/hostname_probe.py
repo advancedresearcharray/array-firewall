@@ -276,12 +276,22 @@ def load_probed_by_mac() -> dict[str, dict[str, str]]:
 def apply_to_dhcp_reservations() -> dict[str, Any]:
     from . import dhcp as dhcp_mod
 
+    cfg = dhcp_mod.config()
+    reservations = {str(r.get("mac", "")).lower(): dict(r) for r in cfg.get("reservations") or [] if r.get("mac")}
     applied: list[str] = []
     for mac, row in load_probed_by_mac().items():
         ip = str(row.get("ip") or "").strip()
         hostname = _clean_hostname(row.get("hostname"))
         if not ip or not hostname or not devices._is_ipv4(ip):
             continue
-        dhcp_mod.add_reservation(mac, ip, hostname)
+        mac = devices.norm_mac(mac)
+        entry: dict[str, str] = {"mac": mac, "ip": ip, "hostname": hostname}
+        if reservations.get(mac) == entry:
+            continue
+        reservations[mac] = entry
         applied.append(mac)
+    if not applied:
+        return {"ok": True, "applied": 0, "macs": []}
+    dhcp_mod.save_config({"reservations": sorted(reservations.values(), key=lambda r: r["mac"])})
+    dhcp_mod.apply()
     return {"ok": True, "applied": len(applied), "macs": applied}

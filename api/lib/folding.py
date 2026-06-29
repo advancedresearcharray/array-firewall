@@ -8,6 +8,9 @@ Maps papers to operational lanes — see docs/ZENODO-FOLDING.md:
 - 17373031 information_flow (conditional entropy proxy)
 - 18079593 memory pattern hints
 - 17844752 quadrant shortcut digest
+- 20942201 recursive quadrant deduction (polynomial search + pattern shortcuts)
+- 18079453 pattern-based encoding (structural redundancy / pattern RLE)
+- 17372973 quantum entanglement / consciousness proxy (QCE investigation scoring)
 - 18005544 unified optimization metadata
 """
 from __future__ import annotations
@@ -40,7 +43,10 @@ ZENODO_REFERENCES = [
     {"doi": "10.5281/zenodo.17373031", "url": "https://zenodo.org/records/17373031", "title": "Information Flow Complexity"},
     {"doi": "10.5281/zenodo.18079593", "url": "https://zenodo.org/records/18079593", "title": "Memory Pattern Optimization"},
     {"doi": "10.5281/zenodo.17844752", "url": "https://zenodo.org/records/17844752", "title": "Recursive Quadrant Deduction"},
+    {"doi": "10.5281/zenodo.20942201", "url": "https://zenodo.org/records/20942201", "title": "RQD: Exponential to Polynomial Complexity"},
+    {"doi": "10.5281/zenodo.18770016", "url": "https://zenodo.org/records/18770016", "title": "ASVI: Shell-Margin Void Index (SMST)"},
     {"doi": "10.5281/zenodo.18079453", "url": "https://zenodo.org/records/18079453", "title": "Pattern-Based Encoding"},
+    {"doi": "10.5281/zenodo.17372973", "url": "https://zenodo.org/records/17372973", "title": "Quantum Consciousness Entanglement (QCE)"},
 ]
 
 _SHORTCUT_CACHE: dict[str, dict[str, Any]] = {}
@@ -349,20 +355,9 @@ def blsb_encode(data: bytes) -> bytes:
 
 def information_flow_bits(prev: bytes, cur: bytes) -> float:
     """Conditional entropy proxy on aligned byte windows (Zenodo 17373031)."""
-    if not cur:
-        return 0.0
-    n = min(len(prev), len(cur), 4096)
-    if n == 0:
-        return 8.0
-    diffs = [cur[i] ^ (prev[i] if i < len(prev) else 0) for i in range(n)]
-    counts: dict[int, int] = {}
-    for d in diffs:
-        counts[d] = counts.get(d, 0) + 1
-    ent = 0.0
-    for c in counts.values():
-        p = c / n
-        ent -= p * math.log2(p)
-    return round(ent, 4)
+    from .information_flow import flow_transition_bytes
+
+    return flow_transition_bytes(prev, cur)
 
 
 def memory_pattern_hints(text: str) -> dict[str, Any]:
@@ -389,13 +384,18 @@ def memory_pattern_hints(text: str) -> dict[str, Any]:
 
 
 def quadrant_shortcut_digest(data: bytes) -> str:
-    """Recursive quadrant split digest (Zenodo 17844752 operational hook)."""
-    if not data:
-        return "0" * 16
-    mid = len(data) // 2
-    q1 = hashlib.sha256(data[:mid]).digest()[:8]
-    q2 = hashlib.sha256(data[mid:]).digest()[:8]
-    return hashlib.sha256(q1 + q2).hexdigest()[:16]
+    """Recursive quadrant split digest — 17844752 hook upgraded via 20942201 RQD."""
+    try:
+        from . import rqd
+
+        return rqd.recursive_quadrant_digest(data, depth=4)
+    except Exception:
+        if not data:
+            return "0" * 16
+        mid = len(data) // 2
+        q1 = hashlib.sha256(data[:mid]).digest()[:8]
+        q2 = hashlib.sha256(data[mid:]).digest()[:8]
+        return hashlib.sha256(q1 + q2).hexdigest()[:16]
 
 
 def cube_space_coords(sample: dict[str, float]) -> list[float]:
@@ -569,31 +569,38 @@ def filter_lane(lane: str, payload: str | bytes, *, record_stats: bool = True) -
 
 
 def wire_compress(raw: bytes, *, record_stats: bool = True) -> dict[str, Any]:
-    """Lossless wire frame compression (Zenodo 18453148)."""
-    url = relay_url()
-    if url and enabled():
-        try:
-            body = json.dumps({"payload": raw.decode("latin-1")}).encode()
-            req = urllib.request.Request(
-                f"{url}/v1/wire/compress",
-                data=body,
-                method="POST",
-                headers={"Content-Type": "application/json"},
-            )
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                out = json.loads(resp.read().decode("utf-8"))
-                out["backend"] = "relay"
-                if record_stats:
-                    _record_operation(
-                        kind="wire",
-                        lane=None,
-                        orig_size=int(out.get("orig_size") or len(raw)),
-                        compressed_size=int(out.get("compressed_size") or len(raw)),
-                        ratio=float(out.get("ratio") or 1),
+    """Lossless wire frame — full 18453148 pipeline (fold + BLSB + gzip)."""
+    try:
+        from . import throughput_fold
+
+        if throughput_fold._cfg().get("enabled", True):  # noqa: SLF001
+            url = relay_url()
+            if url and enabled():
+                try:
+                    body = json.dumps({"payload": raw.decode("latin-1")}).encode()
+                    req = urllib.request.Request(
+                        f"{url}/v1/wire/compress",
+                        data=body,
+                        method="POST",
+                        headers={"Content-Type": "application/json"},
                     )
-                return out
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError):
-            pass
+                    with urllib.request.urlopen(req, timeout=15) as resp:
+                        out = json.loads(resp.read().decode("utf-8"))
+                        out["backend"] = "relay"
+                        if record_stats:
+                            _record_operation(
+                                kind="wire",
+                                lane=None,
+                                orig_size=int(out.get("orig_size") or len(raw)),
+                                compressed_size=int(out.get("compressed_size") or len(raw)),
+                                ratio=float(out.get("effective_throughput_factor") or out.get("ratio") or 1),
+                            )
+                        return out
+                except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError):
+                    pass
+            return throughput_fold.fold_wire_pipeline(raw, record_stats=record_stats)
+    except Exception:
+        pass
     compressed = gzip.compress(raw, compresslevel=6)
     ratio = len(raw) / max(len(compressed), 1)
     result = {
@@ -616,8 +623,13 @@ def wire_compress(raw: bytes, *, record_stats: bool = True) -> dict[str, Any]:
     return result
 
 
-def wire_decompress(payload_b64: str) -> bytes:
-    return gzip.decompress(__import__("base64").b64decode(payload_b64))
+def wire_decompress(payload_b64: str, encoding: str | None = None) -> bytes:
+    try:
+        from . import throughput_fold
+
+        return throughput_fold.fold_wire_decompress(payload_b64, encoding=encoding)
+    except Exception:
+        return gzip.decompress(__import__("base64").b64decode(payload_b64))
 
 
 def compress_json_store(obj: Any) -> dict[str, Any]:
@@ -641,7 +653,10 @@ def compress_json_store(obj: Any) -> dict[str, Any]:
 def decompress_json_store(envelope: dict[str, Any]) -> Any:
     if not envelope.get("_folded"):
         return envelope
-    raw = wire_decompress(str(envelope.get("payload_b64") or ""))
+    raw = wire_decompress(
+        str(envelope.get("payload_b64") or ""),
+        encoding=str(envelope.get("encoding") or ""),
+    )
     return json.loads(raw.decode("utf-8"))
 
 
@@ -686,6 +701,13 @@ def system_sample() -> dict[str, float]:
 def status() -> dict[str, Any]:
     sample = system_sample()
     probe = filter_lane("cpu", json.dumps({"probe": True, "ts": time.time()}), record_stats=False)
+    rqd_status: dict[str, Any] = {}
+    try:
+        from . import rqd
+
+        rqd_status = rqd.status()
+    except Exception:
+        rqd_status = {"ok": False}
     return {
         "ok": True,
         "enabled": enabled(),
@@ -694,6 +716,7 @@ def status() -> dict[str, Any]:
         "fold_dim": fold_dim(),
         "manifold_expansion_ratio": round(fold_dim() / 15.0, 4),
         "zenodo_references": ZENODO_REFERENCES,
+        "rqd": rqd_status,
         "implementation_guide": {"doi": "10.5281/zenodo.18728103", "version": "v2"},
         "lanes": ["cpu", "memory", "network", "storage"],
         "last_probe": {
@@ -709,7 +732,37 @@ def status() -> dict[str, Any]:
             "fold_dim": fold_dim(),
         },
         "savings": savings_report().get("totals"),
+        "throughput_fold": _throughput_fold_status(),
+        "pattern_encode": _pattern_encode_status(),
+        "qce": _qce_status(),
     }
+
+
+def _qce_status() -> dict[str, Any]:
+    try:
+        from . import qce
+
+        return qce.status()
+    except Exception:
+        return {"ok": False}
+
+
+def _pattern_encode_status() -> dict[str, Any]:
+    try:
+        from . import pattern_encode
+
+        return pattern_encode.status()
+    except Exception:
+        return {"ok": False}
+
+
+def _throughput_fold_status() -> dict[str, Any]:
+    try:
+        from . import throughput_fold
+
+        return throughput_fold.status()
+    except Exception:
+        return {"ok": False}
 
 
 def reset_stats() -> dict[str, Any]:

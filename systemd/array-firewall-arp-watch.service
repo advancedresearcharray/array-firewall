@@ -1,0 +1,13 @@
+[Unit]
+Description=array-firewall Xbox ARP watch
+After=network-online.target array-firewall.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/array-firewall/scripts/arp-watch.sh
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

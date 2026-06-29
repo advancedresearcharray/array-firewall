@@ -61,8 +61,16 @@ leaf_qdisc() {
   local mode="$6"
   if [[ "$mode" == "cake" ]]; then
     local diffserv=""
+    local rtt="25ms"
+    local isolate="dual-dsthost"
     [[ "$tier" == "xbox" || "$tier" == "wireless" ]] && diffserv="diffserv4"
-    tc qdisc add dev "$dev" parent "$parent" handle "$handle" cake bandwidth "$bandwidth" $diffserv besteffort dual-dsthost nat wash 2>/dev/null || \
+    [[ "$tier" == "xbox" ]] && rtt="5ms"
+    [[ "$tier" == "wireless" ]] && rtt="20ms"
+    # Xbox speed tests fan out to many server IPs; per-dst isolation caps each at ~rate/N.
+    [[ "$tier" == "xbox" ]] && isolate="flowblind"
+    local memlimit=""
+    [[ "$tier" == "xbox" ]] && memlimit="memlimit 16mb"
+    tc qdisc add dev "$dev" parent "$parent" handle "$handle" cake bandwidth "$bandwidth" $diffserv besteffort $isolate nat wash rtt "$rtt" split-gso $memlimit 2>/dev/null || \
       tc qdisc add dev "$dev" parent "$parent" handle "$handle" fq_codel limit 8192 flows 1024 quantum 1514 target 3ms interval 80ms memory_limit 24Mb
     return
   fi
@@ -85,7 +93,7 @@ clear_qos() {
 setup_ifb() {
   modprobe ifb numifbs=1 2>/dev/null || modprobe ifb 2>/dev/null || true
   ip link add "$IFB" type ifb 2>/dev/null || true
-  ip link set "$IFB" up
+  ip link set "$IFB" up txqueuelen 1000
 }
 
 add_ip_filters() {
@@ -94,7 +102,8 @@ add_ip_filters() {
   IFS=',' read -ra _IPS <<< "$ips_csv"
   for ip in "${_IPS[@]}"; do
     [[ -n "$ip" ]] || continue
-    tc filter add dev "$dev" protocol ip parent 1:0 prio "$prio" u32 match ip src "$ip" flowid "$flowid" 2>/dev/null || true
+    tc filter add dev "$dev" protocol ip parent 1:0 prio "$prio" flower src_ip "$ip" flowid "$flowid" 2>/dev/null || \
+      tc filter add dev "$dev" protocol ip parent 1:0 prio "$prio" u32 match ip src "$ip" flowid "$flowid" 2>/dev/null || true
     prio=$((prio + 1))
   done
 }
@@ -110,15 +119,16 @@ apply_htb_filters() {
   local marks=("$MARK_XBOX" "$MARK_WIRELESS" "$MARK_LAPTOP" "$MARK_PHONE" "$MARK_OTHER")
   local flowids=("1:10" "1:20" "1:30" "1:40" "1:50")
   local i
+  # IP-based filters first (prio 1-9) — classify Xbox even before conntrack mark is set.
+  add_ip_filters "$dev" "1:10" "$HIGH_IPS" 1; prio=10
+  add_ip_filters "$dev" "1:20" "$WIRELESS_IPS" "$prio"; prio=$((prio + 10))
+  add_ip_filters "$dev" "1:30" "$LAPTOP_IPS" "$prio"; prio=$((prio + 10))
+  add_ip_filters "$dev" "1:40" "$PHONE_IPS" "$prio"; prio=$((prio + 10))
+  prio=20
   for i in "${!marks[@]}"; do
     tc filter add dev "$dev" parent 1:0 prio "$prio" protocol ip flower ct_mark "${marks[$i]}" flowid "${flowids[$i]}" 2>/dev/null || true
     prio=$((prio + 1))
   done
-
-  add_ip_filters "$dev" "1:10" "$HIGH_IPS" "$prio"; prio=$((prio + 10))
-  add_ip_filters "$dev" "1:20" "$WIRELESS_IPS" "$prio"; prio=$((prio + 10))
-  add_ip_filters "$dev" "1:30" "$LAPTOP_IPS" "$prio"; prio=$((prio + 10))
-  add_ip_filters "$dev" "1:40" "$PHONE_IPS" "$prio"; prio=$((prio + 10))
 
   tc filter add dev "$dev" protocol ip parent 1:0 prio 90 handle "$MARK_XBOX" fw flowid 1:10 2>/dev/null || true
   tc filter add dev "$dev" protocol ip parent 1:0 prio 91 handle "$MARK_WIRELESS" fw flowid 1:20 2>/dev/null || true
@@ -127,13 +137,26 @@ apply_htb_filters() {
   tc filter add dev "$dev" protocol ip parent 1:0 prio 94 handle "$MARK_OTHER" fw flowid 1:50 2>/dev/null || true
 }
 
+apply_throughput() {
+  clear_qos
+  # Firewalla parity (Smart Queue OFF): no IFB mirred redirect, no HTB tiers.
+  # noqueue on WAN — fq_codel adds ~5–15% overhead at 1G; use noqueue for line rate.
+  tc qdisc add dev "$WAN" root noqueue 2>/dev/null || \
+    tc qdisc add dev "$WAN" root fq_codel limit 10240 flows 1024 quantum 1514 ecn 2>/dev/null || \
+    tc qdisc add dev "$WAN" root pfifo_fast 2>/dev/null || true
+  echo "profile=throughput mode=direct" >"$STATE"
+  log "throughput profile: direct WAN path (no IFB/HTB), noqueue on $WAN"
+}
+
 apply_htb() {
   local dev="$1" total="$2" dir_label="$3" mode="$4"
 
   tc qdisc del dev "$dev" root 2>/dev/null || true
 
   if [[ "$dir_label" == "download" ]]; then
-    tc qdisc add dev "$dev" root handle 1: cake bandwidth "$total" diffserv4 besteffort dual-dsthost nat wash 2>/dev/null || \
+    # flowblind + nonat: avoid triple-isolate/dual-dsthost splitting download across
+    # many CDN IPs during multi-connection speed tests (~950/N Mbps per host).
+    tc qdisc add dev "$dev" root handle 1: cake bandwidth "$total" diffserv4 besteffort flowblind nonat nowash rtt 5ms memlimit 64mb split-gso 2>/dev/null || \
       tc qdisc add dev "$dev" root handle 1: fq_codel limit 10240 flows 1024 quantum 1514 target 5ms interval 100ms memory_limit 32Mb
     return 0
   fi
@@ -157,6 +180,7 @@ apply_htb() {
 
 case "$ACTION" in
   clear) clear_qos; exit 0 ;;
+  throughput) apply_throughput; exit 0 ;;
   apply)
     MODE="$(resolve_mode)"
     echo "mode=$MODE" >"$STATE"
@@ -176,7 +200,7 @@ case "$ACTION" in
     tc -s qdisc show dev "$IFB" || true
     ;;
   *)
-    echo "Usage: $0 {apply|clear|status}" >&2
+    echo "Usage: $0 {apply|throughput|clear|status}" >&2
     exit 1
     ;;
 esac

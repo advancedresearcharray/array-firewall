@@ -1,0 +1,7 @@
+[Unit]
+Description=array-firewall Xbox WAN NAT watchdog
+After=network-online.target array-firewall-api.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/array-firewall/scripts/wan-nat-watchdog.sh

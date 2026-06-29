@@ -17,6 +17,7 @@ ALLOWED=(
   gaming-firewalla-tune.sh
   gaming-moca-tune.sh
   gaming-route-pref.sh
+  gaming-upload-boost.sh
 )
 
 script="${1:-}"

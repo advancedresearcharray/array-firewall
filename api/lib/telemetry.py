@@ -409,6 +409,16 @@ def _is_ipv4_lan(ip: str) -> bool:
 def _device_ips() -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     seen: set[str] = set()
+    cfg = qos.config()
+    xbox_ip = str(cfg.get("xbox_ip") or policies.gaming().get("xbox_ip") or "").strip()
+    xbox_mac = str(policies.gaming().get("xbox_mac") or "").strip()
+
+    # Sidecar router: only track the Xbox path, not the whole house LAN.
+    if policies.role() == "xbox_router":
+        if xbox_ip and _is_ipv4_lan(xbox_ip):
+            return [{"ip": xbox_ip, "mac": xbox_mac}]
+        return rows
+
     for dev in devices.list_devices():
         ip = str(dev.get("ip") or "").strip()
         mac = str(dev.get("mac") or "").strip()
@@ -457,6 +467,8 @@ def _telemetry_table_present() -> bool:
             return False
         if family == "inet" and "ifb_download" not in (proc.stdout or ""):
             return False
+        if family == "inet" and "lan_deliver" not in (proc.stdout or ""):
+            return False
     return True
 
 
@@ -464,12 +476,16 @@ def _render_nft_telemetry() -> str:
     cfg = qos.config()
     lan = str(cfg.get("lan_if") or "eth0")
     wan = str(cfg.get("wan_if") or "eth1")
+    marks = cfg.get("marks") or {}
     counter_decls: list[str] = []
     for row in _device_ips():
         ip = row["ip"]
         safe = ip.replace(".", "_")
         counter_decls.append(f"  counter tel_{safe}_up {{}}")
         counter_decls.append(f"  counter tel_{safe}_down {{}}")
+    for tier in ("xbox", "wireless", "laptop", "phone", "other"):
+        if marks.get(tier) is not None:
+            counter_decls.append(f"  counter tel_mark_{tier}_down {{}}")
     decls = "\n".join(counter_decls) if counter_decls else "  # no devices"
     rules_lan_in = "\n".join(
         f'    ip saddr {row["ip"]} counter name tel_{row["ip"].replace(".", "_")}_up'
@@ -483,8 +499,20 @@ def _render_nft_telemetry() -> str:
         f'    ip daddr {row["ip"]} counter name tel_{row["ip"].replace(".", "_")}_down'
         for row in _device_ips()
     ) or "    # no device IPs"
-    rules_ifb_down = "\n".join(
-        f'    iifname "ifb0" ct original ip saddr {row["ip"]} counter name tel_{row["ip"].replace(".", "_")}_down'
+    ifb_parts: list[str] = []
+    for row in _device_ips():
+        ip = row["ip"]
+        safe = ip.replace(".", "_")
+        ifb_parts.append(
+            f'    iifname "ifb0" ct original ip saddr {ip} counter name tel_{safe}_down'
+        )
+    for tier in ("xbox", "wireless", "laptop", "phone", "other"):
+        mk = marks.get(tier)
+        if mk is not None:
+            ifb_parts.append(f'    iifname "ifb0" ct mark {mk} counter name tel_mark_{tier}_down')
+    rules_ifb_down = "\n".join(ifb_parts) or "    # no device IPs"
+    rules_lan_deliver = "\n".join(
+        f'    oifname "{lan}" ip daddr {row["ip"]} counter name tel_{row["ip"].replace(".", "_")}_down'
         for row in _device_ips()
     ) or "    # no device IPs"
     return f"""table netdev telemetry_dev {{
@@ -502,12 +530,16 @@ def _render_nft_telemetry() -> str:
 table inet telemetry {{
 {decls}
   chain ifb_download {{
-    type filter hook prerouting priority -30; policy accept;
+    type filter hook prerouting priority mangle + 1; policy accept;
 {rules_ifb_down}
   }}
   chain wan_to_lan {{
-    type filter hook forward priority filter - 30; policy accept;
+    type filter hook forward priority mangle + 1; policy accept;
 {rules_fwd_down}
+  }}
+  chain lan_deliver {{
+    type filter hook forward priority mangle + 2; policy accept;
+{rules_lan_deliver}
   }}
 }}
 """
@@ -530,8 +562,45 @@ def ensure_device_counters(*, force: bool = False) -> dict[str, Any]:
     return {"ok": True, "updated": True, "devices": len(_device_ips()), "table": "loaded"}
 
 
+def _tier_primary_ips() -> dict[str, list[str]]:
+    """Map QoS tier → LAN IPs for mark-based IFB download attribution."""
+    cfg = qos.config()
+    xbox_ip = str(cfg.get("xbox_ip") or "").strip()
+    out: dict[str, list[str]] = {t: [] for t in ("xbox", "wireless", "laptop", "phone", "other")}
+    if xbox_ip:
+        out["xbox"].append(xbox_ip)
+    try:
+        buckets = qos.classification_map()
+        for tier in out:
+            for dev in buckets.get(tier) or []:
+                ip = str(dev.get("ip") or "").strip()
+                if ip and ip not in out[tier]:
+                    out[tier].append(ip)
+    except Exception:
+        pass
+    for row in _device_ips():
+        ip = row["ip"]
+        tier = qos.classify_device(row, xbox_ip) if xbox_ip else "other"
+        if tier in out and ip not in out[tier]:
+            out[tier].append(ip)
+    return out
+
+
 def _read_nft_counters() -> dict[str, dict[str, int]]:
     out: dict[str, dict[str, int]] = {}
+    tier_ips = _tier_primary_ips()
+    cfg = qos.config()
+    xbox_ip = str(cfg.get("xbox_ip") or "")
+
+    def _acc(ip: str, direction: str, nbytes: int, npackets: int) -> None:
+        if not ip:
+            return
+        row = out.setdefault(ip, {"up_bytes": 0, "down_bytes": 0, "up_packets": 0, "down_packets": 0})
+        key_b = "up_bytes" if direction == "up" else "down_bytes"
+        key_p = "up_packets" if direction == "up" else "down_packets"
+        row[key_b] = max(row[key_b], int(nbytes))
+        row[key_p] = max(row[key_p], int(npackets))
+
     for table in ("netdev", "inet"):
         tname = "telemetry" if table == "inet" else "telemetry_dev"
         try:
@@ -548,16 +617,26 @@ def _read_nft_counters() -> dict[str, dict[str, int]]:
             if not counter:
                 continue
             name = str(counter.get("name") or "")
+            nbytes = int(counter.get("bytes") or 0)
+            npackets = int(counter.get("packets") or 0)
             m = re.match(r"tel_(\d+_\d+_\d+_\d+)_(up|down)", name)
-            if not m:
+            if m:
+                ip = m.group(1).replace("_", ".")
+                _acc(ip, m.group(2), nbytes, npackets)
                 continue
-            ip = m.group(1).replace("_", ".")
-            direction = m.group(2)
-            row = out.setdefault(ip, {"up_bytes": 0, "down_bytes": 0, "up_packets": 0, "down_packets": 0})
-            key_b = "up_bytes" if direction == "up" else "down_bytes"
-            key_p = "up_packets" if direction == "up" else "down_packets"
-            row[key_b] = max(row[key_b], int(counter.get("bytes") or 0))
-            row[key_p] = max(row[key_p], int(counter.get("packets") or 0))
+            m_mark = re.match(r"tel_mark_(xbox|wireless|laptop|phone|other)_down", name)
+            if m_mark and nbytes > 0:
+                tier = m_mark.group(1)
+                targets = tier_ips.get(tier) or []
+                if tier == "xbox" and xbox_ip:
+                    _acc(xbox_ip, "down", nbytes, npackets)
+                elif len(targets) == 1:
+                    _acc(targets[0], "down", nbytes, npackets)
+                elif targets:
+                    share = nbytes // len(targets)
+                    share_p = npackets // len(targets)
+                    for ip in targets:
+                        _acc(ip, "down", share, share_p)
     return out
 
 
@@ -642,8 +721,7 @@ def _conntrack_traffic() -> dict[str, dict[str, int]]:
 def _device_traffic_counters() -> tuple[dict[str, dict[str, int]], str, dict[str, Any]]:
     ensure = ensure_device_counters()
     nft = _read_nft_counters() if ensure.get("ok") else {}
-    nft_total = sum(v.get("up_bytes", 0) + v.get("down_bytes", 0) for v in nft.values())
-    if nft_total > 0:
+    if nft:
         return nft, "nft", ensure
     ct = _conntrack_traffic()
     if ct:
@@ -811,6 +889,43 @@ def devices_telemetry(
         )
 
     rows.sort(key=lambda r: (r["traffic"]["bps_up"] + r["traffic"]["bps_down"]), reverse=True)
+
+    seen_ips = {str(r.get("ip") or "") for r in rows}
+    if xbox_ip and xbox_ip not in seen_ips:
+        ctr = nft.get(xbox_ip) or {}
+        up_b = int(ctr.get("up_bytes") or 0)
+        down_b = int(ctr.get("down_bytes") or 0)
+        prev_row = prev_dev.get(xbox_ip) or {}
+        if prev_ts:
+            up_rate = _rate_pair(up_b, prev_row.get("up_bytes", 0), dt)
+            down_rate = _rate_pair(down_b, prev_row.get("down_bytes", 0), dt)
+        else:
+            up_rate = {"bps": 0.0, "human": "—", "bytes_delta": 0}
+            down_rate = {"bps": 0.0, "human": "—", "bytes_delta": 0}
+        rows.append(
+            {
+                "mac": str(policies.gaming().get("xbox_mac") or ""),
+                "ip": xbox_ip,
+                "label": "xbox",
+                "hostname": "xbox",
+                "groups": ["gaming"],
+                "qos_tier": "xbox",
+                "internet": "allowed",
+                "last_seen": None,
+                "traffic": {
+                    "bytes_up": up_b,
+                    "bytes_down": down_b,
+                    "bytes_up_human": _fmt_bytes(up_b),
+                    "bytes_down_human": _fmt_bytes(down_b),
+                    "bps_up": up_rate.get("bps", 0),
+                    "bps_down": down_rate.get("bps", 0),
+                    "bps_up_human": up_rate.get("human", "—"),
+                    "bps_down_human": down_rate.get("human", "—"),
+                    "connections": conn.get(xbox_ip, 0),
+                },
+            }
+        )
+        rows.sort(key=lambda r: (r["traffic"]["bps_up"] + r["traffic"]["bps_down"]), reverse=True)
 
     return {
         "ok": True,

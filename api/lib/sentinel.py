@@ -172,7 +172,9 @@ def summary() -> dict[str, Any]:
         "network_guard": {
             "mitigation": ng.get("mitigation"),
             "engage": ng.get("engage"),
+            "mode": ng.get("mode"),
             "packet_shield_active": (ng.get("packet_shield") or {}).get("active"),
+            "upload_assist_active": (ng.get("upload_assist") or {}).get("active"),
         },
         "xbox_ip": xbox_ip(),
         "sentinelUrl": base_url(),

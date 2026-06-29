@@ -94,11 +94,24 @@ sysctl -p /etc/sysctl.d/99-array-firewall.conf >/dev/null 2>&1 || true
 
 install -m 0644 "$INSTALL_ROOT/systemd/array-firewall.service" /etc/systemd/system/array-firewall.service
 install -m 0644 "$INSTALL_ROOT/systemd/array-firewall-api.service" /etc/systemd/system/array-firewall-api.service
+install -m 0644 "$INSTALL_ROOT/systemd/array-firewall-probe-sink.service" /etc/systemd/system/array-firewall-probe-sink.service
+install -m 0644 "$INSTALL_ROOT/systemd/array-firewall-arp-watch.service" /etc/systemd/system/array-firewall-arp-watch.service
+install -m 0644 "$INSTALL_ROOT/systemd/array-firewall-wan-scan-capture.service" /etc/systemd/system/array-firewall-wan-scan-capture.service
+install -m 0644 "$INSTALL_ROOT/systemd/array-firewall-afld-rollup.service" /etc/systemd/system/array-firewall-afld-rollup.service
+install -m 0644 "$INSTALL_ROOT/systemd/array-firewall-afld-rollup.timer" /etc/systemd/system/array-firewall-afld-rollup.timer
+chmod +x "$INSTALL_ROOT/scripts/arp-watch.sh" 2>/dev/null || true
+chmod +x "$INSTALL_ROOT/scripts/wan-scan-capture.py" 2>/dev/null || true
+chmod +x "$INSTALL_ROOT/scripts/afld-rollup.py" 2>/dev/null || true
+chmod +x "$INSTALL_ROOT/gaming-tools/probe-sink-listener.py" 2>/dev/null || true
 
 systemctl daemon-reload
-systemctl enable array-firewall.service array-firewall-api.service
+systemctl enable array-firewall.service array-firewall-api.service array-firewall-probe-sink.service array-firewall-arp-watch.service array-firewall-wan-scan-capture.service array-firewall-afld-rollup.timer
 systemctl restart array-firewall.service
 systemctl restart array-firewall-api.service
+systemctl restart array-firewall-probe-sink.service 2>/dev/null || true
+systemctl restart array-firewall-arp-watch.service 2>/dev/null || true
+systemctl restart array-firewall-wan-scan-capture.service 2>/dev/null || true
+systemctl restart array-firewall-afld-rollup.timer 2>/dev/null || true
 
 "$INSTALL_ROOT/scripts/perf-tune.sh" apply 2>/dev/null || true
 

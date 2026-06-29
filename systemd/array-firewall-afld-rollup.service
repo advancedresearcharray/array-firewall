@@ -1,0 +1,7 @@
+[Unit]
+Description=array-firewall AFLD rollup and 24h prune
+After=array-firewall-api.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/array-firewall/scripts/afld-rollup.py

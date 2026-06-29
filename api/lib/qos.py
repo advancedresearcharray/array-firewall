@@ -14,7 +14,7 @@ APPLY_SCRIPT = Path("/opt/array-firewall/scripts/apply-qos.sh")
 STATE = Path("/var/lib/array-firewall/qos.state")
 
 PROXMOX_OUI = "bc:24:11"
-PROXMOX_HOSTS = {"192.168.167.39"}
+PROXMOX_HOSTS = {"192.168.167.39", "192.168.167.221"}
 PROXMOX_NAME_RE = re.compile(
     r"(proxmox|array-|pct|qemu|vm\d|ct\d|lxc|hypervisor|thirtynince)",
     re.I,
@@ -94,6 +94,7 @@ XBOX_NAME_RE = re.compile(r"(xbox|squatx|gaming)", re.I)
 
 DEFAULT_QOS: dict[str, Any] = {
     "enabled": True,
+    "profile": "throughput",
     "wan_if": "eth1",
     "lan_if": "eth0",
     "wan_up": "1000mbit",
@@ -123,6 +124,13 @@ DEFAULT_QOS: dict[str, Any] = {
 }
 
 
+def parse_mbit(val: str) -> float:
+    m = re.match(r"^(\d+(?:\.\d+)?)\s*(mbit|mbps|m)?$", str(val or "").strip().lower())
+    if not m:
+        return 1000.0
+    return float(m.group(1))
+
+
 def config() -> dict[str, Any]:
     data = policies.load()
     cfg = dict(DEFAULT_QOS)
@@ -135,6 +143,25 @@ def config() -> dict[str, Any]:
     for tier in PRIORITY_ORDER:
         if tier in (qos_pol.get("classes") or {}):
             classes[tier] = {**classes.get(tier, {}), **qos_pol["classes"][tier]}
+    # Map legacy high/medium/low policy tiers onto xbox/laptop/other defaults.
+    legacy = qos_pol.get("classes") or {}
+    if legacy.get("high") and "xbox" not in (qos_pol.get("classes") or {}):
+        classes["xbox"] = {**classes.get("xbox", {}), **legacy["high"]}
+        classes["wireless"] = {**classes.get("wireless", {}), **legacy.get("medium", legacy["high"])}
+    if legacy.get("medium"):
+        classes["laptop"] = {**classes.get("laptop", {}), **legacy["medium"]}
+        classes["phone"] = {**classes.get("phone", {}), **{**legacy["medium"], "rate": legacy["medium"].get("rate", "150mbit")}}
+    if legacy.get("low"):
+        classes["other"] = {**classes.get("other", {}), **legacy["low"]}
+    if qos_pol.get("xbox_rate"):
+        classes["xbox"] = {**classes.get("xbox", {}), "rate": str(qos_pol["xbox_rate"])}
+    if qos_pol.get("xbox_ceil"):
+        classes["xbox"] = {**classes.get("xbox", {}), "ceil": str(qos_pol["xbox_ceil"])}
+    # Avoid HTB rate<ceil throttling on the gaming tier during multi-flow speed tests.
+    xbox_ceil = str(classes.get("xbox", {}).get("ceil") or "")
+    xbox_rate = str(classes.get("xbox", {}).get("rate") or "")
+    if xbox_ceil and (not xbox_rate or parse_mbit(xbox_rate) < parse_mbit(xbox_ceil) * 0.95):
+        classes["xbox"] = {**classes.get("xbox", {}), "rate": xbox_ceil}
     cfg["classes"] = classes
     g = policies.gaming()
     if g.get("xbox_ip"):
@@ -144,6 +171,10 @@ def config() -> dict[str, Any]:
         cfg["wan_if"] = net["wan_if"]
     if net.get("lan_if"):
         cfg["lan_if"] = net["lan_if"]
+    if policies.role() == "xbox_router":
+        # Default sidecar: direct WAN (Firewalla parity). Set qos.profile=gaming for HTB/CAKE + boosts.
+        if not qos_pol.get("profile"):
+            cfg["profile"] = "throughput"
     return cfg
 
 
@@ -379,6 +410,26 @@ def apply() -> dict[str, Any]:
         subprocess.run(["/opt/array-firewall/scripts/apply-qos.sh", "clear"], check=False, timeout=30)
         return {"ok": True, "enabled": False}
 
+    profile = str(cfg.get("profile") or "throughput").lower()
+    throughput = profile in ("throughput", "direct", "firewalla", "off", "passthrough")
+
+    if throughput:
+        subprocess.run(["nft", "delete", "table", "inet", "qos"], capture_output=True, timeout=5)
+        proc = subprocess.run(
+            [str(APPLY_SCRIPT), "throughput"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env={**os.environ, "WAN_IF": str(cfg["wan_if"])},
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(proc.stderr.strip() or proc.stdout.strip() or "apply-qos throughput failed")
+        STATE.write_text(
+            json.dumps({"ok": True, "profile": "throughput", "config": cfg}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        return status()
+
     mangle = render_nft_mangle()
     mangle_path = Path("/var/lib/array-firewall/qos-mangle.nft")
     mangle_path.write_text(mangle, encoding="utf-8")
@@ -446,6 +497,12 @@ def apply() -> dict[str, Any]:
         json.dumps({"ok": True, "classification": buckets, "priority": priority_summary(), "config": cfg}, indent=2) + "\n",
         encoding="utf-8",
     )
+    try:
+        from . import nat as nat_mod
+
+        nat_mod.ensure_wan_nat()
+    except Exception:
+        pass
     return status()
 
 
@@ -464,6 +521,7 @@ def status() -> dict[str, Any]:
     return {
         "ok": True,
         "enabled": bool(cfg.get("enabled", True)),
+        "profile": str(cfg.get("profile") or "throughput"),
         "mode": mode,
         "config": cfg,
         "priority_order": list(PRIORITY_ORDER),
@@ -486,6 +544,181 @@ def autorate_bandwidth(**kwargs: Any) -> dict[str, Any]:
     from . import stability
 
     return stability.autorate(**kwargs)
+
+
+UPLOAD_BOOST_STATE = Path("/var/lib/array-firewall/upload-boost.state")
+UPLOAD_BOOST_BASELINE = Path("/var/lib/array-firewall/upload-boost.baseline.json")
+BUFFER_TUNE_STATE = Path("/var/lib/array-firewall/buffer-tune.state")
+
+VALID_BUFFER_PROFILES = frozenset({"gaming", "normal", "light", "desync", "kick"})
+
+
+def upload_boost_config() -> dict[str, Any]:
+    defaults: dict[str, Any] = {
+        "enabled": True,
+        "ceil_factor": 0.98,
+        "other_ceil_factor": 0.55,
+        "xbox_rate_factor": 0.85,
+        "pressure_warn_pct": 80,
+    }
+    ua = dict(policies.gaming().get("upload_assist") or {})
+    defaults.update(ua)
+    return defaults
+
+
+def _parse_kv_state(path: Path) -> dict[str, str]:
+    if not path.is_file():
+        return {}
+    out: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if "=" in line:
+            k, v = line.split("=", 1)
+            out[k.strip()] = v.strip()
+    return out
+
+
+def upload_boost_status() -> dict[str, Any]:
+    from . import gaming as gaming_mod
+
+    cfg = upload_boost_config()
+    state = _parse_kv_state(UPLOAD_BOOST_STATE)
+    baseline = None
+    if UPLOAD_BOOST_BASELINE.is_file():
+        try:
+            baseline = json.loads(UPLOAD_BOOST_BASELINE.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            baseline = None
+    tc_xbox = ""
+    try:
+        wan = str(config().get("wan_if") or "eth1")
+        raw = subprocess.check_output(["tc", "class", "show", "dev", wan], text=True, timeout=5)
+        for line in raw.splitlines():
+            if "class htb 1:10" in line:
+                tc_xbox = line.strip()
+                break
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        tc_xbox = "unavailable"
+    active = state.get("active") == "1"
+    return {
+        "ok": True,
+        "active": active,
+        "config": cfg,
+        "state": state,
+        "baseline": baseline,
+        "tc_xbox_class": tc_xbox,
+        "script": gaming_mod.run_script_api("gaming-upload-boost.sh", ["status"]),
+    }
+
+
+def upload_boost_apply(*, session_hex: str | None = None, phase: str | None = None) -> dict[str, Any]:
+    from . import gaming as gaming_mod, session_events
+
+    if not upload_boost_config().get("enabled", True):
+        return {"ok": False, "error": "upload_assist disabled in policy"}
+    result = gaming_mod.run_script_api("gaming-upload-boost.sh", ["apply"])
+    result["status"] = upload_boost_status()
+    if result.get("ok"):
+        session_events.append(
+            "upload.boost",
+            session_hex=session_hex,
+            phase=phase,
+            detail="upload assist applied",
+        )
+    return result
+
+
+def upload_boost_relax(*, session_hex: str | None = None, phase: str | None = None) -> dict[str, Any]:
+    from . import gaming as gaming_mod, session_events
+
+    result = gaming_mod.run_script_api("gaming-upload-boost.sh", ["relax"])
+    result["status"] = upload_boost_status()
+    if result.get("ok"):
+        session_events.append(
+            "upload.relax",
+            session_hex=session_hex,
+            phase=phase,
+            detail="upload assist relaxed",
+        )
+    return result
+
+
+def buffer_tune_status() -> dict[str, Any]:
+    from . import gaming as gaming_mod
+
+    state = _parse_kv_state(BUFFER_TUNE_STATE)
+    result = gaming_mod.run_script_api("gaming-buffer-tune.sh", ["status"])
+    profile = "gaming"
+    if BUFFER_TUNE_STATE.is_file():
+        first = BUFFER_TUNE_STATE.read_text(encoding="utf-8").splitlines()[0].strip()
+        if first.startswith("profile="):
+            profile = first.split()[0].split("=", 1)[1].strip()
+        elif first.startswith("mode="):
+            profile = first.split("=", 1)[1].strip()
+        elif state.get("profile"):
+            profile = str(state["profile"]).split()[0]
+    active = profile not in ("", "gaming", "normal", "off")
+    return {
+        "ok": True,
+        "active": active,
+        "profile": profile,
+        "state": state,
+        "script": result,
+    }
+
+
+def buffer_tune_apply(
+    profile: str = "gaming",
+    *,
+    session_hex: str | None = None,
+    phase: str | None = None,
+    sample: dict[str, float] | None = None,
+    auto_rqd: bool = False,
+) -> dict[str, Any]:
+    from . import gaming as gaming_mod, session_events
+
+    if auto_rqd and profile in ("auto", "rqd"):
+        from . import rqd
+
+        rqd_pick = rqd.select_buffer_profile(sample or {})
+        profile = str(rqd_pick.get("profile") or "gaming")
+    profile = (profile or "gaming").lower()
+    if profile in ("off", "relax", "idle"):
+        result = gaming_mod.run_script_api("gaming-buffer-tune.sh", ["off"])
+        event_kind = "buffer.off"
+    elif profile not in VALID_BUFFER_PROFILES:
+        return {"ok": False, "error": f"profile must be one of: {sorted(VALID_BUFFER_PROFILES)}"}
+    else:
+        result = gaming_mod.run_script_api("gaming-buffer-tune.sh", ["apply", profile])
+        event_kind = f"buffer.{profile}"
+    result["status"] = buffer_tune_status()
+    if result.get("ok"):
+        session_events.append(
+            event_kind,
+            session_hex=session_hex,
+            phase=phase,
+            detail=f"buffer profile {profile}",
+            meta={"profile": profile, "auto_rqd": auto_rqd},
+        )
+    return result
+
+
+def rqd_buffer_recommendation(sample: dict[str, float] | None = None) -> dict[str, Any]:
+    """RQD buffer profile pick from live telemetry (Zenodo 20942201)."""
+    from . import folding, rqd
+
+    if sample is None:
+        sample = {}
+        try:
+            from . import stability
+
+            shaping = stability.shaping_stats()
+            q_up = (shaping.get("queues") or shaping.get("interfaces") or {}).get("egress_upload") or {}
+            sample["upload_util_pct"] = float(q_up.get("utilization_pct") or 0)
+            sample["queue_pressure"] = float(q_up.get("backlog_bytes") or 0)
+        except Exception:
+            pass
+        sample.update(folding.system_sample())
+    return rqd.select_buffer_profile(sample)
 
 
 def _tc_summary(dev: str) -> str:

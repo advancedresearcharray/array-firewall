@@ -1,0 +1,14 @@
+[Unit]
+Description=array-firewall WAN scan capture → AFLD
+After=network-online.target array-firewall.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/array-firewall/scripts/wan-scan-capture.py
+Restart=always
+RestartSec=5
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

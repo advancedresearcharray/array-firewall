@@ -57,6 +57,34 @@ cutover = bool(net.get("cutover"))
 lan_if = dhcp.get("interface") or net.get("lan_if", "eth1")
 mgmt_if = "eth0"
 wan_if = net.get("wan_if", "eth1")
+gaming = data.get("gaming") or {}
+
+if role == "xbox_router":
+    xbox_ip = (gaming.get("xbox_ip") or "").strip()
+    xbox_mac = (gaming.get("xbox_mac") or "").strip().lower()
+    xbox_gw = net.get("gateway_ip") or "192.168.5.1"
+    if xbox_ip and xbox_mac:
+        xbox_dns = "1.1.1.1"
+        xbox_lines = [
+            "# array-firewall dnsmasq — xbox_router (Xbox-only, same wire)",
+            f"# mac={xbox_mac} ip={xbox_ip} gw={xbox_gw}",
+            f"interface={lan_if}",
+            "bind-interfaces",
+            f"except-interface={wan_if}",
+            f"listen-address={xbox_gw}",
+            f"dhcp-range={xbox_ip},{xbox_ip},255.255.255.0,{dhcp.get('lease_time', '12h')}",
+            f"dhcp-host={xbox_mac},{xbox_ip},squatx,infinite",
+            f"dhcp-option=3,{xbox_gw}",
+            f"dhcp-option=6,{xbox_dns}",
+            f"domain={dhcp.get('domain', 'array.local')}",
+            "log-dhcp",
+            "dhcp-authoritative",
+        ]
+        for upstream in dhcp.get("upstream_dns") or []:
+            xbox_lines.append(f"server={upstream}")
+        out_path.write_text("\n".join(xbox_lines) + "\n")
+        print(f"[setup-dnsmasq] xbox_router DHCP {xbox_ip} on {lan_if} gw={xbox_gw}")
+        sys.exit(0)
 
 if role == "gateway" and cutover:
     gw = net.get("gateway_ip", dhcp.get("gateway", "192.168.167.1"))
@@ -171,8 +199,31 @@ out_path.write_text("\n".join(lines) + "\n")
 print(f"[setup-dnsmasq] wrote {out_path} enabled={dhcp.get('enabled')} if={lan_if}")
 PY
 
-if python3 -c "import json; d=json.load(open('$POLICIES')); exit(0 if d.get('dhcp',{}).get('enabled',True) else 1)" 2>/dev/null; then
-  systemctl restart dnsmasq 2>/dev/null || true
+if python3 - <<'PY' 2>/dev/null
+import json
+from pathlib import Path
+p = Path("$POLICIES")
+data = json.loads(p.read_text()) if p.is_file() else {}
+net = data.get("network") or {}
+gaming = data.get("gaming") or {}
+dhcp = data.get("dhcp") or {}
+if net.get("role") == "xbox_router" and gaming.get("xbox_mac") and gaming.get("xbox_ip"):
+    raise SystemExit(0)
+raise SystemExit(0 if dhcp.get("enabled", True) else 1)
+PY
+then
+  exec 9>/run/array-firewall-setup-dnsmasq.lock
+  flock -n 9 || exit 0
+  if systemctl is-active --quiet dnsmasq 2>/dev/null; then
+    systemctl reload dnsmasq 2>/dev/null || systemctl restart dnsmasq 2>/dev/null || true
+  else
+    systemctl reset-failed dnsmasq 2>/dev/null || true
+    systemctl start dnsmasq 2>/dev/null || true
+  fi
 else
-  systemctl stop dnsmasq 2>/dev/null || true
+  if grep -qE '^dhcp-(range|host)=' "$OUT" 2>/dev/null; then
+    :
+  else
+    systemctl stop dnsmasq 2>/dev/null || true
+  fi
 fi

@@ -360,12 +360,24 @@ def _resolve_ip_collisions(
 PROBE_INTERVAL_SEC = int(os.environ.get("ARRAY_FW_PROBE_INTERVAL", "300"))
 
 
+PROBE_LOCK = Path("/run/array-firewall-probe.lock")
+
+
 def _maybe_refresh_probed_hostnames() -> None:
     probed_file = Path(os.environ.get("ARRAY_FW_PROBED_HOSTNAMES", "/var/lib/array-firewall/probed-hostnames.json"))
     if probed_file.is_file():
         age = time.time() - probed_file.stat().st_mtime
         if age < PROBE_INTERVAL_SEC:
             return
+    lock = PROBE_LOCK
+    try:
+        lock.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        os.close(fd)
+    except FileExistsError:
+        return
+    except OSError:
+        return
     try:
         subprocess.Popen(
             [
@@ -373,14 +385,18 @@ def _maybe_refresh_probed_hostnames() -> None:
                 "-c",
                 "import sys; sys.path.insert(0,'/opt/array-firewall/api'); "
                 "from lib import hostname_probe, devices; "
-                "hostname_probe.refresh(); hostname_probe.apply_to_dhcp_reservations(); devices.discover()",
+                "hostname_probe.refresh(); hostname_probe.apply_to_dhcp_reservations(); devices.discover(); "
+                "import pathlib; pathlib.Path('/run/array-firewall-probe.lock').unlink(missing_ok=True)",
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             start_new_session=True,
         )
     except OSError:
-        pass
+        try:
+            lock.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def discover() -> dict[str, Any]:

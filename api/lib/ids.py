@@ -12,7 +12,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from . import devices, policies, qos
+from . import devices, information_flow, ids_enforce, policies, qos
 
 EVENTS_FILE = Path("/var/lib/array-firewall/ids-events.json")
 STATE_FILE = Path("/var/lib/array-firewall/ids-state.json")
@@ -56,6 +56,17 @@ NIST_RULES: list[dict[str, Any]] = [
         "description": "Traffic anomalies warranting operator review.",
         "signals": ["ai_elevated_risk", "priority_mismatch"],
     },
+    {
+        "id": "SI-4-IFC",
+        "framework": "Information Flow Complexity",
+        "title": "Dynamic State Monitoring",
+        "description": "Shannon flow H(State_t|State_{t-1}) spikes and super-linear transitions (Zenodo 17373031).",
+        "signals": [
+            "information_flow_spike",
+            "superlinear_information_flow",
+            "sustained_high_flow",
+        ],
+    },
 ]
 
 SUSPICIOUS_PORTS = {
@@ -86,6 +97,7 @@ def _cfg() -> dict[str, Any]:
         "ollama_timeout_sec": 30,
         "connection_spike_threshold": 80,
         "port_scan_threshold": 12,
+        "block_ttl_sec": 3600,
     }
     base.update(data.get("ids") or {})
     return base
@@ -385,6 +397,21 @@ def analyze(*, force: bool = False) -> dict[str, Any]:
 
     flows = _parse_flows()
     new_events = _heuristic_scan(flows, cfg)
+
+    try:
+        information_flow.analyze_step()
+        for sig in information_flow.ids_signals():
+            _emit(
+                new_events,
+                severity=str(sig.get("severity") or "medium"),
+                signal=str(sig.get("signal") or "information_flow_spike"),
+                nist_id="SI-4-IFC",
+                title=str(sig.get("title") or "Information flow anomaly"),
+                detail=str(sig.get("detail") or ""),
+                meta=sig.get("meta") if isinstance(sig.get("meta"), dict) else {},
+            )
+    except OSError:
+        pass
     ai = _ai_assess(new_events, cfg) if new_events else {"ok": False, "skipped": True}
 
     if ai.get("ok") and isinstance(ai.get("assessment"), dict):
@@ -415,11 +442,15 @@ def analyze(*, force: bool = False) -> dict[str, Any]:
         if e.get("ts", "") > time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now - 300))
     }
     merged = existing
+    added_for_enforce: list[dict[str, Any]] = []
     for ev in new_events:
         key = f"{ev.get('signal')}:{ev.get('device_ip')}"
         if key not in recent_keys:
             merged.append(ev)
+            added_for_enforce.append(ev)
             recent_keys.add(key)
+
+    enforce_result = ids_enforce.apply_events(added_for_enforce)
 
     _save_events(merged)
     SNAPSHOT_FILE.write_text(
@@ -451,6 +482,7 @@ def analyze(*, force: bool = False) -> dict[str, Any]:
         "ai": ai,
         "priority": priority,
         "mode": cfg.get("mode", "log_only"),
+        "enforcement": enforce_result,
     }
 
 
@@ -474,12 +506,21 @@ def summary() -> dict[str, Any]:
 
     recent = highlights(limit=8)
     priority = qos.priority_summary()
+    mode = cfg.get("mode", "log_only")
+    mode_labels = {
+        "log_only": "Log only — suspicious activity recorded, not blocked",
+        "alert": "Alert — elevated events flagged for review",
+        "block": "Block — high-severity sources blocked at firewall",
+        "quarantine": "Quarantine — high-severity devices denied internet",
+    }
 
     return {
         "ok": True,
         "enabled": bool(cfg.get("enabled", True)),
-        "mode": cfg.get("mode", "log_only"),
-        "mode_label": "Log only — suspicious activity recorded, not blocked",
+        "mode": mode,
+        "mode_label": mode_labels.get(str(mode), str(mode)),
+        "valid_modes": list(ids_enforce.VALID_MODES),
+        "enforcement": ids_enforce.status(),
         "nist_rules": len(NIST_RULES),
         "nist_catalog": NIST_RULES,
         "last_scan": state.get("last_scan"),
@@ -490,6 +531,7 @@ def summary() -> dict[str, Any]:
         "ai": state.get("ai") or {},
         "priority": priority,
         "scan_interval_sec": cfg.get("scan_interval_sec", 30),
+        "information_flow": information_flow.status(),
     }
 
 
@@ -500,3 +542,11 @@ def events(limit: int = 100, severity: str | None = None) -> dict[str, Any]:
 
 def nist_catalog() -> dict[str, Any]:
     return {"ok": True, "rules": NIST_RULES, "mode": _cfg().get("mode", "log_only")}
+
+
+def set_mode(mode: str) -> dict[str, Any]:
+    return ids_enforce.set_mode(mode)
+
+
+def clear_enforcement() -> dict[str, Any]:
+    return ids_enforce.clear_blocks()

@@ -98,6 +98,14 @@ def read_live_conf() -> dict[str, str]:
     return out
 
 
+def _xbox_dhcp_active() -> bool:
+    net = policies.network()
+    if net.get("role") != "xbox_router":
+        return False
+    g = policies.gaming()
+    return bool((g.get("xbox_mac") or "").strip() and (g.get("xbox_ip") or "").strip())
+
+
 def apply() -> dict[str, Any]:
     if not SETUP.is_file():
         raise FileNotFoundError(f"missing {SETUP}")
@@ -105,7 +113,10 @@ def apply() -> dict[str, Any]:
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.strip() or proc.stdout.strip() or "setup-dnsmasq failed")
     cfg = config()
-    if not cfg.get("enabled", True):
+    if cfg.get("enabled", True) or _xbox_dhcp_active():
+        subprocess.run(["systemctl", "reset-failed", "dnsmasq"], check=False, timeout=5)
+        subprocess.run(["systemctl", "start", "dnsmasq"], check=False, timeout=15)
+    else:
         subprocess.run(["systemctl", "stop", "dnsmasq"], check=False, timeout=15)
     return status()
 
@@ -113,12 +124,14 @@ def apply() -> dict[str, Any]:
 def status() -> dict[str, Any]:
     cfg = config()
     active = _service_active()
-    enabled = bool(cfg.get("enabled", True))
+    xbox_dhcp = _xbox_dhcp_active()
+    enabled = bool(cfg.get("enabled", True)) or xbox_dhcp
     return {
         "ok": True,
         "service": "dnsmasq",
         "running": active,
         "enabled": enabled,
+        "xbox_dhcp": xbox_dhcp,
         "effective": active and enabled,
         "config": cfg,
         "live_conf": read_live_conf(),

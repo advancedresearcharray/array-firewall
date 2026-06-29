@@ -37,12 +37,21 @@ EOF
   fi
   sysctl -p "$f" >/dev/null 2>&1 || true
   log "sysctl applied ($(grep -c '=' "$f") keys)"
+  local rmem
+  rmem="$(sysctl -n net.core.rmem_max 2>/dev/null || echo 0)"
+  if [[ "${rmem:-0}" -lt 1048576 ]]; then
+    log "WARN: net.core.rmem_max=${rmem} — run /opt/array-firewall/scripts/tune-host-gw.sh on Proxmox host and reboot CT"
+  fi
 }
 
 tune_nic() {
   local ifc="$1"
   [[ -d "/sys/class/net/$ifc" ]] || return 0
   ip link set "$ifc" up 2>/dev/null || true
+  # Match veth bridge MTU (9000 inside CT vs 1500 on wire causes silent perf loss).
+  if [[ "$ifc" == "${WAN_IF:-eth1}" ]]; then
+    ip link set "$ifc" mtu 1500 2>/dev/null || true
+  fi
   if command -v ethtool >/dev/null 2>&1; then
     ethtool -K "$ifc" gro on gso on tso on rx on tx on sg on 2>/dev/null || true
     ethtool -G "$ifc" rx 4096 tx 4096 2>/dev/null || \

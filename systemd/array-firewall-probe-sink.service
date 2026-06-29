@@ -1,0 +1,16 @@
+[Unit]
+Description=array-firewall TCP probe honeypot sink
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=PROBE_SINK_BIND=0.0.0.0
+Environment=PROBE_SINK_PORT=39217
+Environment=PROBE_SINK_LOG=/var/lib/array-firewall/probe-sink-listener.jsonl
+ExecStart=/usr/bin/python3 /opt/array-firewall/gaming-tools/probe-sink-listener.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

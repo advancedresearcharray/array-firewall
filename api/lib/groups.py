@@ -291,11 +291,18 @@ def apply_group_config(group_id: str) -> dict[str, Any]:
 
     shield = str(cfg.get("packet_shield", "off")).lower()
     shield_result = None
-    if shield in {"normal", "strict", "shield"}:
+    if shield in {"normal", "strict", "shield", "console", "in-match", "peer-strict", "matchmaking"}:
         try:
             from . import gaming as gaming_mod
 
-            level = "strict" if shield == "strict" else "normal"
+            level = {
+                "strict": "strict",
+                "shield": "normal",
+                "console": "console",
+                "in-match": "in-match",
+                "peer-strict": "peer-strict",
+                "matchmaking": "matchmaking",
+            }.get(shield, "normal")
             shield_result = gaming_mod.apply_packet_shield(level)
         except Exception as exc:  # noqa: BLE001
             errors.append(f"packet_shield: {exc}")

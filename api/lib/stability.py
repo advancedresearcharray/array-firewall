@@ -10,7 +10,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from . import devices, groups, policies, qos
+from . import devices, groups, policies, qos, zones
 
 AUTORATE_STATE = Path("/var/lib/array-firewall/qos-autorate.json")
 SHAPING_STATE = Path("/var/lib/array-firewall/shaping.state.json")
@@ -91,11 +91,13 @@ def parse_mbit(val: str) -> float:
 
 def derive_class_rates(wan_up_mbit: float, wan_down_mbit: float) -> tuple[dict[str, dict[str, Any]], str]:
     up = max(wan_up_mbit, 5.0)
-    xbox = min(up * 0.92, up)
+    # Gaming tier runs at line rate (rate=ceil) so HTB token buckets do not cap speed tests.
+    xbox = up * 0.98
     classes = {
-        "high": {"rate": mbit_str(xbox), "ceil": mbit_str(up * 0.98), "prio": 1},
+        "high": {"rate": mbit_str(xbox), "ceil": mbit_str(xbox), "prio": 1},
         "medium": {"rate": mbit_str(up * 0.35), "ceil": mbit_str(up * 0.88), "prio": 5},
-        "low": {"rate": mbit_str(up * 0.08), "ceil": mbit_str(up * 0.22), "prio": 10},
+        # Default HTB class (1:50) must not cap gateway/unknown traffic at ~200 Mbps on 1G.
+        "low": {"rate": mbit_str(up * 0.5), "ceil": mbit_str(up * 0.98), "prio": 10},
     }
     return classes, mbit_str(xbox)
 
@@ -355,10 +357,21 @@ def ensure_group_defaults() -> list[str]:
         },
         "google-mesh": {
             "name": "Google Mesh",
-            "description": "Nest/Google Wifi — deprioritized bulk traffic",
+            "description": "Nest/Google Wifi — wireless DHCP only (.167.3-.50); wired LAN uses Firewalla",
             "config": {
                 "internet": "allowed",
                 "qos_profile": "low",
+                "dns_filter": "off",
+                "packet_shield": "off",
+                "dhcp_allocate": False,
+            },
+        },
+        "wired-lan": {
+            "name": "Wired LAN",
+            "description": "Ethernet clients — lease from Firewalla (.167.51+), never Google mesh",
+            "config": {
+                "internet": "allowed",
+                "qos_profile": "medium",
                 "dns_filter": "off",
                 "packet_shield": "off",
                 "dhcp_allocate": False,
@@ -411,6 +424,48 @@ def auto_assign_mesh_devices(*, apply: bool = True) -> dict[str, Any]:
     return {"ok": True, "assigned": assigned, "count": len(assigned)}
 
 
+def ensure_wired_lan_devices(*, apply: bool = True) -> dict[str, Any]:
+    """Tag known wired clients so they do not use Google mesh DHCP (Firewalla .51+ instead)."""
+    ensure_group_defaults()
+    assigned: list[str] = []
+    skipped: list[str] = []
+    xbox_mac = (policies.gaming().get("xbox_mac") or "").lower()
+    for dev in devices.list_devices():
+        mac = (dev.get("mac") or "").lower()
+        if not mac or mac == xbox_mac:
+            continue
+        if groups.is_google_mesh(mac, dev.get("hostname", ""), dev.get("label", "")):
+            continue
+        grps = [g.lower() for g in (dev.get("groups") or [])]
+        if "wireless-infra" in grps or "google-mesh" in grps:
+            continue
+        ip = (dev.get("ip") or (dev.get("dhcp") or {}).get("ip") or "").strip()
+        wired = False
+        if ip.startswith("192.168.167.") and not zones._ip_in_ranges(
+            ip, zones.config().get("wireless", {}).get("ip_ranges") or []
+        ):
+            wired = True
+        for g in ("gaming", "infrastructure", "laptops", "wired-lan"):
+            if g in grps:
+                wired = True
+                break
+        if not wired:
+            continue
+        if "wired-lan" not in grps:
+            groups.add_member("wired-lan", mac, apply=apply)
+            assigned.append(mac)
+        store = devices.load_store()
+        entry = store.setdefault("devices", {}).setdefault(mac, {"mac": mac})
+        dhcp = entry.setdefault("dhcp", {})
+        if dhcp.get("allocate") is not False:
+            dhcp["allocate"] = False
+            dhcp["source"] = "firewalla"
+            skipped.append(mac)
+        if apply:
+            devices.save_store(store)
+    return {"ok": True, "wired_lan": assigned, "firewalla_dhcp": skipped, "count": len(assigned)}
+
+
 def bootstrap_on_boot() -> dict[str, Any]:
     """Run on gateway boot: policy defaults, optional autorate, full perf stack."""
     from . import perf as perf_mod
@@ -424,6 +479,7 @@ def bootstrap_on_boot() -> dict[str, Any]:
         (ensure_group_defaults, "group_defaults"),
         (lambda: ensure_xbox_in_gaming_group(apply=False), "xbox_gaming_group"),
         (lambda: auto_assign_mesh_devices(apply=False), "mesh_assign"),
+        (lambda: ensure_wired_lan_devices(apply=False), "wired_lan"),
     ):
         try:
             results["steps"].append({name: fn()})
@@ -461,6 +517,7 @@ def apply_stability_stack(*, autorate_first: bool = False) -> dict[str, Any]:
     steps.append({"group_defaults": ensure_group_defaults()})
     steps.append({"xbox": ensure_xbox_in_gaming_group()})
     steps.append({"mesh": auto_assign_mesh_devices()})
+    steps.append({"wired_lan": ensure_wired_lan_devices()})
     steps.append({"perf": perf_mod.apply_all()})
     try:
         groups.apply_group_config("gaming")

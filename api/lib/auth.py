@@ -6,7 +6,10 @@ from pathlib import Path
 TOKEN_FILE = Path(os.environ.get("ARRAY_FW_TOKEN_FILE", "/etc/array-firewall/api.token"))
 ALLOW_CIDRS = tuple(
     c.strip()
-    for c in os.environ.get("ARRAY_FW_ALLOW_CIDRS", "192.168.167.0/24,10.99.0.0/24,127.0.0.0/8").split(",")
+    for c in os.environ.get(
+        "ARRAY_FW_ALLOW_CIDRS",
+        "192.168.167.0/24,192.168.5.0/24,10.99.0.0/24,127.0.0.0/8",
+    ).split(",")
     if c.strip()
 )
 

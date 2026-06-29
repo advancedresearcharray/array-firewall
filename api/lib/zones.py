@@ -21,10 +21,16 @@ DEFAULT_CFG: dict[str, Any] = {
         "groups": ["bridge", "laptops"],
         "macs": [],
     },
+    "restricted": {
+        "groups": ["guest", "iot"],
+        "ip_ranges": ["192.168.167.201-192.168.167.250"],
+    },
     "allow": {
         "gateway_dns": True,
         "wireless_internet": True,
         "trusted_internet": True,
+        "restricted_internet": True,
+        "restricted_lateral": False,
     },
 }
 
@@ -129,6 +135,9 @@ def classify_device(mac: str, dev: dict[str, Any] | None = None, store: dict[str
     for g in cfg.get("trusted", {}).get("groups") or []:
         if g.lower() in grps:
             return "trusted"
+    for g in cfg.get("restricted", {}).get("groups") or []:
+        if g.lower() in grps:
+            return "restricted"
     dhcp = entry.get("dhcp") or {}
     if dhcp.get("allocate") is False:
         return "wireless"
@@ -140,6 +149,8 @@ def classify_device(mac: str, dev: dict[str, Any] | None = None, store: dict[str
         return "trusted"
     if _ip_in_ranges(ip, cfg.get("wireless", {}).get("ip_ranges") or []):
         return "wireless"
+    if _ip_in_ranges(ip, cfg.get("restricted", {}).get("ip_ranges") or []):
+        return "restricted"
     return "unknown"
 
 
@@ -149,12 +160,15 @@ def ip_sets() -> dict[str, list[str]]:
     data = devices.load_store()
     wireless_ranges = cfg.get("wireless", {}).get("ip_ranges") or []
     trusted_ranges = cfg.get("trusted", {}).get("ip_ranges") or []
-    out: dict[str, set[str]] = {"wireless": set(), "trusted": set(), "bridge": set()}
+    restricted_ranges = cfg.get("restricted", {}).get("ip_ranges") or []
+    out: dict[str, set[str]] = {"wireless": set(), "trusted": set(), "bridge": set(), "restricted": set()}
 
     for spec in wireless_ranges:
         out["wireless"].add(spec.strip())
     for spec in trusted_ranges:
         out["trusted"].add(spec.strip())
+    for spec in restricted_ranges:
+        out["restricted"].add(spec.strip())
 
     for mac, dev in data.get("devices", {}).items():
         ip = dev.get("ip") or (dev.get("dhcp") or {}).get("ip") or ""
@@ -168,13 +182,19 @@ def ip_sets() -> dict[str, list[str]]:
             out["wireless"].add(ip)
         elif zone == "trusted" and not _ip_in_ranges(ip, trusted_ranges):
             out["trusted"].add(ip)
+        elif zone == "restricted" and not _ip_in_ranges(ip, restricted_ranges):
+            out["restricted"].add(ip)
 
     return {k: sorted(v) for k, v in out.items()}
 
 
 def nft_set_block(name: str, elements: list[str]) -> str:
     if not elements:
-        return ""
+        return f"""
+  set {name} {{
+    type ipv4_addr
+    flags interval
+  }}"""
     # nft interval sets: mix singles and ranges
     formatted = ", ".join(elements)
     return f"""
@@ -192,8 +212,21 @@ def render_forward_zones(lan_if: str, gw_ip: str) -> tuple[str, str]:
         return "", f'    iifname "{lan_if}" oifname "{lan_if}" drop\n'
 
     sets = ip_sets()
-    blocks = "".join(nft_set_block(f"zone_{k}", v) for k, v in sets.items() if v)
+    for zone_name in ("wireless", "trusted", "bridge", "restricted"):
+        sets.setdefault(zone_name, [])
+    blocks = "".join(nft_set_block(f"zone_{k}", v) for k, v in sets.items())
     google = cfg.get("google_router_ip") or "192.168.167.2"
+
+    allow_restricted_lateral = bool(cfg.get("allow", {}).get("restricted_lateral", False))
+    restricted_rules = ""
+    if not allow_restricted_lateral:
+        restricted_rules = """
+    ip saddr @zone_restricted ip daddr @zone_wireless drop comment "guest-iot-barrier"
+    ip saddr @zone_restricted ip daddr @zone_trusted drop comment "guest-iot-barrier"
+    ip saddr @zone_restricted ip daddr @zone_bridge drop comment "guest-iot-barrier"
+    ip saddr @zone_wireless ip daddr @zone_restricted drop comment "guest-iot-barrier"
+    ip saddr @zone_trusted ip daddr @zone_restricted drop comment "guest-iot-barrier"
+    ip saddr @zone_restricted ip daddr @zone_restricted accept"""
 
     chain = f"""
   chain lan_lateral {{
@@ -206,7 +239,7 @@ def render_forward_zones(lan_if: str, gw_ip: str) -> tuple[str, str]:
     ip saddr {gw_ip} accept
     ip saddr {google} accept
     ip saddr @zone_wireless ip daddr @zone_trusted drop comment "zone-barrier"
-    ip saddr @zone_trusted ip daddr @zone_wireless drop comment "zone-barrier"
+    ip saddr @zone_trusted ip daddr @zone_wireless drop comment "zone-barrier"{restricted_rules}
     drop
   }}"""
     hook = f'    iifname "{lan_if}" oifname "{lan_if}" jump lan_lateral\n'
@@ -221,7 +254,13 @@ def render_forward_hook(lan_if: str, gw_ip: str) -> str:
 def status() -> dict[str, Any]:
     cfg = config()
     data = devices.load_store()
-    by_zone: dict[str, list[dict[str, Any]]] = {"wireless": [], "trusted": [], "bridge": [], "unknown": []}
+    by_zone: dict[str, list[dict[str, Any]]] = {
+        "wireless": [],
+        "trusted": [],
+        "bridge": [],
+        "restricted": [],
+        "unknown": [],
+    }
     for mac, dev in sorted(data.get("devices", {}).items()):
         ip = dev.get("ip") or (dev.get("dhcp") or {}).get("ip") or ""
         zone = classify_device(mac, dev, data)
@@ -239,5 +278,5 @@ def status() -> dict[str, Any]:
         "config": cfg,
         "ip_sets": ip_sets(),
         "devices_by_zone": by_zone,
-        "barrier": "wireless ↔ trusted blocked; bridge hosts may cross",
+        "barrier": "wireless ↔ trusted blocked; guest/IoT internet-only; bridge hosts may cross",
     }

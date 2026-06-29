@@ -29,3 +29,9 @@ STATE="/var/lib/array-firewall/packet-shield.state"
 if [[ -f "$STATE" ]] && grep -q '^mode=shield' "$STATE" 2>/dev/null; then
   /opt/array-firewall/scripts/packet-shield-nft.sh shield normal || true
 fi
+python3 - <<'PY'
+import sys
+sys.path.insert(0, "/opt/array-firewall/api")
+from lib import nat
+nat.ensure_wan_nat()
+PY

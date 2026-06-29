@@ -9,7 +9,7 @@
     "uplink_if": "eth1",
     "lan_cidr": "192.168.167.0/24",
     "mgmt_cidr": "192.168.167.0/24",
-    "gateway_ip": "192.168.167.1",
+    "gateway_ip": "192.168.167.3",
     "default_posture": "deny_new_devices",
     "unsolicited_wan": "deny",
     "nat": true
@@ -32,7 +32,13 @@
     "allow": {
       "gateway_dns": true,
       "wireless_internet": true,
-      "trusted_internet": true
+      "trusted_internet": true,
+      "restricted_internet": true,
+      "restricted_lateral": false
+    },
+    "restricted": {
+      "groups": ["guest", "iot"],
+      "ip_ranges": ["192.168.167.201-192.168.167.250"]
     }
   },
   "defaults": {
@@ -48,8 +54,8 @@
     "range_end": "10.99.0.200",
     "netmask": "255.255.255.0",
     "lease_time": "12h",
-    "gateway": "192.168.167.1",
-    "dns": "192.168.167.1",
+    "gateway": "192.168.167.3",
+    "dns": "192.168.167.3",
     "domain": "array-firewall.local",
     "upstream_dns": ["1.1.1.1", "8.8.8.8"],
     "authoritative": true,
@@ -114,8 +120,20 @@
       "config": {
         "internet": "allowed",
         "qos_profile": "balanced",
-        "dns_filter": "off",
+        "dns_filter": "on",
         "packet_shield": "off"
+      }
+    },
+    "guest": {
+      "name": "Guest",
+      "description": "Guest WiFi clients — internet only, no lateral LAN",
+      "members": [],
+      "config": {
+        "internet": "allowed",
+        "qos_profile": "balanced",
+        "dns_filter": "on",
+        "packet_shield": "off",
+        "dhcp_allocate": true
       }
     },
     "gaming": {
@@ -197,7 +215,10 @@
     "ollama_url": "http://192.168.167.62:11434",
     "ollama_model": "llama3.2:1b",
     "connection_spike_threshold": 80,
-    "port_scan_threshold": 12
+    "port_scan_threshold": 12,
+    "block_ttl_sec": 3600,
+    "quarantine_on_high": true,
+    "auto_reload": true
   },
   "port_forwards": [],
   "dmz": {
@@ -208,9 +229,19 @@
   },
   "upnp": {
     "enabled": true,
-    "secure_mode": false,
+    "secure_mode": true,
+    "xbox_only": true,
     "lease_seconds": 3600,
     "allow_lan": true
+  },
+  "dns_filter": {
+    "enabled": true,
+    "force_lan_dns": true,
+    "block_doh_dot": true,
+    "feeds": [
+      "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
+    ],
+    "custom_domains": []
   },
   "blocklists": {
     "dns": [],
@@ -220,7 +251,106 @@
     "xbox_ip": "192.168.167.65",
     "xbox_mac": "28:ea:0b:75:3b:75",
     "packet_shield_in_match_only": true,
-    "sentinel_port": 8098
+    "sentinel_port": 8098,
+    "mitigation": {
+      "tiny_packet_only": true,
+      "auto_block_peers": false,
+      "auto_ids_block": false,
+      "auto_shield_sync": true,
+      "matchmaking_allowlist": true,
+      "console_mode": true,
+      "auto_block_vps_peers": false,
+      "lobby_reputation_gate": false,
+      "auto_route_pref_in_match": false,
+      "peer_ttl_sec": 86400,
+      "ids_block_ttl_sec": 3600,
+      "per_source_udp_rate": 500,
+      "conn_cap_per_peer": 40,
+      "min_mitigate_interval_sec": 15,
+      "repeat_offender_hits": 3,
+      "repeat_offender_ttl_sec": 604800,
+      "honeypot_enabled": true,
+      "sink_port": 39217,
+      "auto_block_on_probe": true,
+      "auto_block_wan_scanners": true,
+      "wan_scan_block": {
+        "enabled": true,
+        "ttl_sec": 86400,
+        "block_on_first_probe": true
+      },
+      "probe_block_ttl_sec": 86400,
+      "tcp_rst_non_game": true,
+      "auto_route_pref_in_match": true
+    },
+    "afld": {
+      "enabled": true,
+      "retention_sec": 86400,
+      "rollup_min_bytes": 8192,
+      "kinds": ["wan_scan", "probe_sink", "honeypot"]
+    },
+    "allowlist_learn": {
+      "enabled": true,
+      "prefix_len": 24,
+      "min_hits": 3,
+      "max_new_cidrs": 8,
+      "auto_apply_in_match": false
+    },
+    "rqd": {
+      "enabled": true,
+      "prune_threshold": 0.15,
+      "max_depth": 6,
+      "shortcut_cache": true,
+      "auto_buffer_in_match": false
+    },
+    "asvi": {
+      "enabled": true,
+      "prefix_len": 24,
+      "stage_threshold": 0.35,
+      "act_threshold": 0.65,
+      "min_hits": 2,
+      "auto_stage_allowlist": false
+    },
+    "throughput_fold": {
+      "enabled": true,
+      "wire_min_bytes": 512,
+      "auto_wire_sentinel": true,
+      "blsb_before_gzip": true,
+      "include_fold_sidecar": true,
+      "pattern_rle_before_blsb": true
+    },
+    "pattern_encode": {
+      "enabled": true,
+      "min_bytes": 64,
+      "min_gain_pct": 3.0,
+      "max_pattern_len": 32,
+      "include_analysis": true
+    },
+    "qce": {
+      "enabled": true,
+      "min_rows": 3,
+      "investigate_boost": 18.0,
+      "peak_entropy_band": true,
+      "include_iit_phi": true
+    },
+    "upload_assist": {
+      "enabled": true,
+      "ceil_factor": 0.98,
+      "other_ceil_factor": 0.55,
+      "xbox_rate_factor": 0.85,
+      "pressure_warn_pct": 80,
+      "in_match_desync_buffer": true,
+      "auto_boost_in_lobby": true,
+      "buffer": {
+        "gaming_xbox_rtt": "8ms",
+        "gaming_ifb_rtt": "8ms",
+        "desync_xbox_rtt": "5ms",
+        "desync_ifb_rtt": "5ms",
+        "kick_xbox_rtt": "3ms",
+        "kick_ifb_rtt": "3ms",
+        "xbox_memlimit": "4mb",
+        "ifb_memlimit": "8mb"
+      }
+    }
   },
   "perf": {
     "enabled": true,

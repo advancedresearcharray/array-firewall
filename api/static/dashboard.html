@@ -78,7 +78,59 @@
       gap: .5rem;
       flex-wrap: wrap;
       justify-content: flex-end;
+      min-width: 0;
     }
+    .auth-bar label.token-label {
+      font-size: .78rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .auth-bar #token {
+      min-width: 140px;
+      max-width: 220px;
+      flex: 1 1 140px;
+    }
+    .connect-strip {
+      background: linear-gradient(180deg, rgba(77,163,255,.14), rgba(77,163,255,.06));
+      border-bottom: 1px solid rgba(77,163,255,.25);
+      padding: .75rem 1.25rem;
+    }
+    .connect-strip-inner {
+      max-width: 1280px;
+      margin: 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: .65rem;
+    }
+    .connect-strip strong { font-size: .9rem; white-space: nowrap; }
+    .connect-strip input[type="password"],
+    .connect-panel input[type="password"] {
+      min-width: min(100%, 280px);
+      flex: 1 1 200px;
+      padding: .55rem .75rem;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: .88rem;
+    }
+    .connect-panel {
+      background: var(--panel);
+      border: 1px solid rgba(77,163,255,.35);
+      border-radius: var(--radius-lg);
+      padding: 1rem 1.15rem;
+      margin-bottom: 1rem;
+      box-shadow: var(--shadow);
+    }
+    .connect-panel-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: .65rem;
+      margin-bottom: .5rem;
+    }
+    .connect-panel h2 { margin: 0 0 .35rem; font-size: 1.05rem; }
     .clock { color: var(--muted-dim); font-size: .78rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .last-updated { color: var(--muted-dim); font-size: .72rem; font-variant-numeric: tabular-nums; white-space: nowrap; margin-left: .5rem; opacity: .85; }
     .last-updated.live { color: var(--ok); opacity: 1; }
@@ -535,6 +587,11 @@
       margin-bottom: 1rem;
       font-size: .88rem;
     }
+    .err.connect-hint {
+      color: var(--text);
+      background: rgba(234, 179, 8, 0.1);
+      border-color: rgba(234, 179, 8, 0.35);
+    }
     .hint-box {
       background: var(--surface);
       border: 1px solid var(--border-subtle);
@@ -605,6 +662,34 @@
     .tier-medium { color: var(--warn); }
     .tier-low { color: var(--muted); }
 
+    .subtabs { display: flex; gap: .35rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .subtab {
+      padding: .4rem .75rem; border-radius: 999px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--muted); font-size: .78rem; font-weight: 600; cursor: pointer;
+    }
+    .subtab.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+    .subpanel { display: none; }
+    .subpanel.active { display: block; }
+    .sentinel-embed {
+      width: 100%; height: 720px; border: 1px solid var(--border); border-radius: var(--radius);
+      background: #0b0f14;
+    }
+    .policy-textarea {
+      width: 100%; min-height: 220px; font-family: ui-monospace, monospace; font-size: .78rem;
+      background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: .65rem;
+    }
+    .form-row { display: flex; flex-wrap: wrap; gap: .65rem; align-items: center; margin-bottom: .65rem; }
+    .form-row label { font-size: .82rem; color: var(--muted); display: inline-flex; gap: .35rem; align-items: center; }
+
+    .sb-bar-row { display: grid; grid-template-columns: 5.5rem 1fr 2.5rem; gap: .5rem; align-items: center; margin-bottom: .35rem; }
+    .sb-bar-label { font-size: .72rem; color: var(--muted); }
+    .sb-bar-track { height: .45rem; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+    .sb-bar-fill { height: 100%; background: linear-gradient(90deg, #3b82f6, #8b5cf6); border-radius: 999px; }
+    .sb-bar-val { font-size: .72rem; color: var(--muted); text-align: right; }
+    .sb-projection { font-size: 1.1rem; font-weight: 600; margin: .5rem 0; }
+    .sb-ref { font-size: .72rem; color: var(--muted-dim); margin-top: .5rem; }
+
     footer {
       max-width: 1280px;
       margin: 0 auto;
@@ -626,7 +711,8 @@
         </div>
       </div>
       <div class="auth-bar">
-        <input type="password" id="token" placeholder="API token" style="min-width:160px" />
+        <label class="token-label" for="token">API token</label>
+        <input type="password" id="token" placeholder="Paste token" autocomplete="off" />
         <button class="primary" id="saveToken">Connect</button>
         <button id="refresh">Refresh</button>
         <span class="toolbar-divider"></span>
@@ -645,8 +731,18 @@
         <button class="tab" data-tab="traffic" role="tab">Traffic</button>
         <button class="tab" data-tab="security" role="tab">Security</button>
         <button class="tab" data-tab="gaming" role="tab">Gaming &amp; Performance</button>
+        <button class="tab" data-tab="gaming-ops" role="tab">Gaming Ops</button>
+        <button class="tab" data-tab="policies" role="tab">Policies</button>
       </div>
     </nav>
+    <div class="connect-strip" id="connectStrip">
+      <div class="connect-strip-inner">
+        <strong>Connect to manage</strong>
+        <input type="password" id="tokenStrip" placeholder="Paste API token here" autocomplete="off" aria-label="API token" />
+        <button class="primary" id="saveTokenStrip">Connect</button>
+        <span class="sub">View-only without token · changes need Connect</span>
+      </div>
+    </div>
   </header>
 
   <main>
@@ -654,6 +750,15 @@
 
     <!-- ═══ OVERVIEW ═══ -->
     <div class="tab-panel active" id="panel-overview" role="tabpanel">
+      <section class="connect-panel" id="connectPanel">
+        <h2>API connection</h2>
+        <p class="sub" style="margin:0 0 .75rem">Paste your gateway API token below to manage devices, NAT, and shield.</p>
+        <div class="connect-panel-row">
+          <input type="password" id="tokenPanel" placeholder="API token" autocomplete="off" aria-label="API token" />
+          <button class="primary" id="saveTokenPanel">Connect</button>
+        </div>
+        <p class="sub mono" style="margin:0;font-size:.75rem">On Proxmox: <span class="mono">pct exec 940 -- cat /etc/array-firewall/api.token</span></p>
+      </section>
       <section class="section">
         <div class="section-head">
           <div>
@@ -661,6 +766,15 @@
             <p>Default-deny firewall with MAC allowlist, NAT, and device quarantine until approved.</p>
           </div>
           <div class="section-actions">
+            <label style="font-size:.78rem;color:var(--muted)">Level
+              <select id="shieldLevelOverview" style="margin-left:.25rem">
+                <option value="normal">normal</option>
+                <option value="strict">strict</option>
+                <option value="console">console</option>
+                <option value="in-match">in-match</option>
+                <option value="peer-strict">peer-strict</option>
+              </select>
+            </label>
             <button id="shieldOn">Enable shield</button>
             <button id="shieldOff">Relax shield</button>
             <button id="prepareGateway">Stage gateway</button>
@@ -684,8 +798,9 @@
               <p>Lobby integrity · co-hosted on <span class="mono">:8098</span></p>
             </div>
             <div class="section-actions">
-              <button class="sm" id="sentinelOpen">Open dashboard</button>
-              <button class="sm" id="sentinelSync">Sync config</button>
+            <button class="sm" id="sentinelOpen">Open dashboard</button>
+            <button class="sm" id="sentinelEmbed">Embed below</button>
+            <button class="sm" id="sentinelSync">Sync config</button>
             </div>
           </div>
           <div class="stat-grid">
@@ -695,6 +810,9 @@
             <div class="stat"><label>Connections</label><div class="value" id="sentConns">—</div></div>
             <div class="stat"><label>Network guard</label><div class="value" id="sentGuard">—</div></div>
             <div class="stat"><label>Polls · Xbox</label><div class="value mono" id="sentPollsXbox">—</div></div>
+          </div>
+          <div id="sentinelEmbedWrap" hidden style="margin-top:1rem">
+            <iframe class="sentinel-embed" id="sentinelFrameOverview" title="Warzone Sentinel"></iframe>
           </div>
         </section>
 
@@ -776,6 +894,9 @@
           <div>
             <h2>Devices on LAN</h2>
             <p>New devices are quarantined (no internet) until you approve them or add them to an allowed group.</p>
+          </div>
+          <div class="section-actions">
+            <button class="sm" id="goProbeHostnames">Probe hostnames</button>
           </div>
         </div>
         <div class="table-wrap">
@@ -874,6 +995,7 @@
           <div class="section-actions">
             <button class="primary" id="natXboxDmz">Xbox DMZ</button>
             <button id="natXboxPreset">Xbox port preset</button>
+            <button id="natUpnpXboxSecure">Xbox-only UPnP</button>
             <button id="natReload">Reload NAT</button>
           </div>
         </div>
@@ -897,7 +1019,8 @@
         <h3 class="sub" style="margin:0 0 .5rem;font-weight:600;color:var(--text)">UPnP / NAT-PMP</h3>
         <div class="form-grid" style="margin-bottom:.75rem">
           <label class="inline"><input type="checkbox" id="upnpEnabled" checked /> UPnP enabled for LAN devices</label>
-          <label class="inline"><input type="checkbox" id="upnpSecure" /> Secure mode (LAN-only mappings)</label>
+          <label class="inline"><input type="checkbox" id="upnpSecure" checked /> Secure mode (Xbox-only when set)</label>
+          <label class="inline"><input type="checkbox" id="upnpXboxOnly" /> Xbox-only mappings</label>
           <label style="justify-content:flex-end">
             <span style="visibility:hidden">.</span>
             <button class="primary" id="upnpSave">Save UPnP</button>
@@ -933,6 +1056,31 @@
       <section class="section panel">
         <div class="section-head">
           <div>
+            <h2>DNS filtering</h2>
+            <p>Blocklist via dnsmasq · force LAN DNS · block DoH/DoT bypass</p>
+          </div>
+          <div class="section-actions">
+            <button class="primary" id="dnsSync">Sync blocklists</button>
+            <button id="dnsSave">Save DNS policy</button>
+          </div>
+        </div>
+        <div class="form-grid" style="margin-bottom:1rem">
+          <label class="inline"><input type="checkbox" id="dnsEnabled" /> Blocklist filtering enabled</label>
+          <label class="inline"><input type="checkbox" id="dnsForce" checked /> Force LAN DNS (gateway only)</label>
+          <label class="inline"><input type="checkbox" id="dnsBlockDoh" checked /> Block DoH/DoT bypass</label>
+        </div>
+        <div class="stat-grid" style="margin-bottom:1rem">
+          <div class="stat"><label>Blocked domains</label><div class="value" id="dnsDomainCount">—</div></div>
+          <div class="stat"><label>Last sync</label><div class="value mono" id="dnsSyncedAt">—</div></div>
+          <div class="stat"><label>Blocklist</label><div class="value" id="dnsBlocklistState">—</div></div>
+        </div>
+        <label>Custom domains (one per line)<textarea id="dnsCustom" rows="4" placeholder="ads.example.com&#10;tracker.example.net" style="width:100%;margin-top:.35rem;font-family:var(--mono);font-size:.85rem"></textarea></label>
+        <div class="hint-box" id="dnsHint">Clients must use gateway DNS (192.168.167.1). External UDP/TCP 53, DoT (853), and DoH resolvers are blocked at the firewall.</div>
+      </section>
+
+      <section class="section panel">
+        <div class="section-head">
+          <div>
             <h2>Gateway cutover</h2>
             <p>Replace Firewalla as network exit. Run preflight before live cutover.</p>
           </div>
@@ -943,6 +1091,10 @@
           </div>
         </div>
         <div id="cutoverChecks" class="hint-box" style="margin-bottom:1rem">Run preflight to check readiness.</div>
+        <div class="stat-grid" style="margin-bottom:1rem">
+          <div class="stat"><label>Cutover status</label><div class="value" id="goCutoverStatus">—</div></div>
+        </div>
+        <div class="hint-box" id="goCutoverDetail">—</div>
         <div class="hint-box">
           Live cutover (brief outage):<br>
           <span class="mono">cd /root/deploy/array-firewall && FORCE_CUTOVER=1 ./scripts/cutover-gateway.sh</span><br>
@@ -1140,15 +1292,24 @@
         <div class="section-head">
           <div>
             <h2>AI intrusion detection</h2>
-            <p>NIST-aligned monitoring · log-only mode · AI traffic priority management</p>
+            <p>NIST-aligned monitoring · enforce modes: log / alert / block / quarantine</p>
           </div>
           <div class="section-actions">
+            <select id="idsModeSelect" class="sm" style="margin-right:.5rem">
+              <option value="log_only">Log only</option>
+              <option value="alert">Alert</option>
+              <option value="block">Block</option>
+              <option value="quarantine">Quarantine</option>
+            </select>
+            <button class="sm" id="idsModeSave">Set mode</button>
+            <button class="sm" id="idsClearBlocks">Clear blocks</button>
             <button class="primary sm" id="idsScan">Scan now</button>
             <button class="sm" id="idsApplyQos">Apply priority QoS</button>
           </div>
         </div>
         <div class="stat-grid" style="margin-bottom:1rem">
           <div class="stat"><label>Mode</label><div class="value" id="idsMode">—</div></div>
+          <div class="stat"><label>Blocked IPs</label><div class="value mono" id="idsBlockedCount">—</div></div>
           <div class="stat"><label>Last scan</label><div class="value mono" id="idsLastScan">—</div></div>
           <div class="stat"><label>Flows</label><div class="value" id="idsFlowCount">—</div></div>
           <div class="stat"><label>Events</label><div class="value" id="idsEventTotal">—</div></div>
@@ -1158,9 +1319,30 @@
         <div class="hint-box" id="idsAiSummary">AI assessment appears after the next scan.</div>
       </section>
 
+      <section class="section panel" style="margin-top:1rem">
+        <div class="section-head">
+          <div>
+            <h2>Information Flow Complexity</h2>
+            <p>Flow(M,x,t) = H(State<sub>t</sub> | State<sub>t−1</sub>) · <a href="https://zenodo.org/records/17373031" target="_blank" rel="noopener">Zenodo 17373031</a></p>
+          </div>
+          <div class="section-actions">
+            <button class="sm" id="ifcAnalyze">Step now</button>
+          </div>
+        </div>
+        <div class="stat-grid" style="margin-bottom:1rem">
+          <div class="stat"><label>Last step flow</label><div class="value mono" id="ifcLastFlow">—</div></div>
+          <div class="stat"><label>Total flow</label><div class="value mono" id="ifcTotalFlow">—</div></div>
+          <div class="stat"><label>Steps</label><div class="value" id="ifcSteps">—</div></div>
+          <div class="stat"><label>Avg flow</label><div class="value mono" id="ifcAvgFlow">—</div></div>
+          <div class="stat"><label>Peak flow</label><div class="value mono" id="ifcPeakFlow">—</div></div>
+          <div class="stat"><label>Barriers</label><div class="value" id="ifcBarriers"><span class="badge ok">3 bypassed</span></div></div>
+        </div>
+        <div class="hint-box" id="ifcHint">Dynamic Shannon entropy of network state transitions — detects super-linear flow spikes IDS static rules miss.</div>
+      </section>
+
       <div class="two-col">
         <section class="section panel">
-          <div class="section-head"><div><h2>Highlights</h2><p>Suspicious activity (logged, not blocked)</p></div></div>
+          <div class="section-head"><div><h2>Highlights</h2><p>Suspicious activity — action reflects IDS enforce mode</p></div></div>
           <div class="table-wrap">
             <table>
               <thead><tr><th>When</th><th>Severity</th><th>Event</th><th>Device</th><th>NIST</th></tr></thead>
@@ -1210,6 +1392,13 @@
             <button class="primary" id="sentinelOpenG">Open sentinel dashboard</button>
             <button id="sentinelSyncG">Sync config</button>
             <span class="toolbar-divider"></span>
+            <select id="shieldLevelG" style="font-size:.82rem">
+              <option value="normal">normal</option>
+              <option value="strict">strict</option>
+              <option value="console">console</option>
+              <option value="in-match">in-match</option>
+              <option value="peer-strict">peer-strict</option>
+            </select>
             <button id="shieldOnG">Enable shield</button>
             <button id="shieldOffG">Relax shield</button>
           </div>
@@ -1302,12 +1491,344 @@
             </table>
           </div>
         </div>
-        <div class="hint-box" id="foldHint" style="margin-top:.75rem">Guides: <a href="https://zenodo.org/records/18728103" target="_blank" rel="noopener">18728103</a> · <a href="https://zenodo.org/records/18453148" target="_blank" rel="noopener">18453148</a> · <a href="https://zenodo.org/records/18102374" target="_blank" rel="noopener">18102374</a></div>
+        <div class="hint-box" id="foldHint" style="margin-top:.75rem">Guides: <a href="https://zenodo.org/records/18728103" target="_blank" rel="noopener">18728103</a> · <a href="https://zenodo.org/records/18453148" target="_blank" rel="noopener">18453148</a> · <a href="https://zenodo.org/records/18102374" target="_blank" rel="noopener">18102374</a> · <a href="https://zenodo.org/records/17373031" target="_blank" rel="noopener">17373031 IFC</a> · <a href="https://zenodo.org/records/20942201" target="_blank" rel="noopener">20942201 RQD</a> · <a href="https://zenodo.org/records/18079453" target="_blank" rel="noopener">18079453 Pattern</a></div>
+        <div class="stat-grid" id="rqdStatsGrid" style="margin-top:.75rem">
+          <div class="stat"><label>RQD searches</label><div class="value" id="rqdSearches">—</div></div>
+          <div class="stat"><label>Quadrants pruned</label><div class="value" id="rqdPruned">—</div></div>
+          <div class="stat"><label>Shortcut hit rate</label><div class="value" id="rqdHitRate">—</div></div>
+          <div class="stat"><label>Complexity ↓</label><div class="value" id="rqdReduction">—</div></div>
+        </div>
+        <div class="stat-grid" id="tpFoldGrid" style="margin-top:.65rem">
+          <div class="stat"><label>Link Mbps</label><div class="value mono" id="tpLinkMbps">—</div></div>
+          <div class="stat"><label>Effective Mbps</label><div class="value mono" id="tpEffectiveMbps">—</div></div>
+          <div class="stat"><label>Wire avg ratio</label><div class="value" id="tpAvgRatio">—</div></div>
+          <div class="stat"><label>Preservation σ</label><div class="value" id="tpPreservation">—</div></div>
+        </div>
+        <div class="stat-grid" id="patternFoldGrid" style="margin-top:.65rem">
+          <div class="stat"><label>Pattern stage</label><div class="value" id="patStageEnabled">—</div></div>
+          <div class="stat"><label>Apply rate</label><div class="value" id="patApplyRate">—</div></div>
+          <div class="stat"><label>Pattern avg ratio</label><div class="value" id="patAvgRatio">—</div></div>
+          <div class="stat"><label>Redundancy</label><div class="value" id="patRedundancy">—</div></div>
+        </div>
+        <div class="toolbar" style="margin-top:.5rem">
+          <button class="sm" id="tpEstimateBtn">Estimate wire fold</button>
+          <button class="sm" id="patAnalyzeBtn">Analyze pattern redundancy</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- ═══ GAMING OPS ═══ -->
+    <div class="tab-panel" id="panel-gaming-ops" role="tabpanel">
+      <div class="subtabs" id="goSubtabs">
+        <button type="button" class="subtab active" data-go="defenses">Defenses &amp; upload</button>
+        <button type="button" class="subtab" data-go="connections">Connections DB</button>
+        <button type="button" class="subtab" data-go="peers">Peer blocklist</button>
+        <button type="button" class="subtab" data-go="intel">Intel &amp; abuse</button>
+        <button type="button" class="subtab" data-go="innovation">Innovation</button>
+        <button type="button" class="subtab" data-go="sentinel">Sentinel embed</button>
+      </div>
+
+      <div class="subpanel active" id="go-panel-defenses">
+        <div class="two-col">
+          <section class="section panel">
+            <div class="section-head"><div><h2>Network guard</h2><p>Live from Sentinel — buffers, shield, MoCA, upload assist.</p></div></div>
+            <div class="stat-grid">
+              <div class="stat"><label>Buffer mode</label><div class="value" id="goBufferMode">—</div></div>
+              <div class="stat"><label>Engaged</label><div class="value" id="goBufferEngage">—</div></div>
+              <div class="stat"><label>Flood guard</label><div class="value" id="goFloodGuard">—</div></div>
+              <div class="stat"><label>MoCA QoS</label><div class="value" id="goMocaQos">—</div></div>
+              <div class="stat"><label>In-match shield</label><div class="value" id="goInMatchShield">—</div></div>
+              <div class="stat"><label>Upload util</label><div class="value" id="goUploadUtil">—</div></div>
+            </div>
+            <p class="sub" id="goMitigation" style="margin:.75rem 0">—</p>
+            <div id="goUploadAlerts"></div>
+            <div class="toolbar" style="margin-top:.75rem">
+              <button class="sm" id="goBufferKick">Apply kick (3ms)</button>
+              <button class="sm" id="goBufferDesync">Apply desync (5ms)</button>
+              <button class="sm" id="goBufferOff">Restore idle</button>
+            </div>
+          </section>
+          <section class="section panel">
+            <div class="section-head"><div><h2>Upload assist</h2><p>Xbox HTB boost — ~98% shaped upload ceiling.</p></div></div>
+            <div class="stat-grid">
+              <div class="stat"><label>Status</label><div class="value" id="goUploadActive">—</div></div>
+              <div class="stat"><label>Shaped WAN</label><div class="value mono" id="goUploadShaped">—</div></div>
+              <div class="stat"><label>Xbox ceil</label><div class="value mono" id="goUploadXboxCeil">—</div></div>
+              <div class="stat"><label>Other ceil</label><div class="value mono" id="goUploadOtherCeil">—</div></div>
+              <div class="stat"><label>Queue grade</label><div class="value" id="goQueueGrade">—</div></div>
+              <div class="stat"><label>Backlog</label><div class="value mono" id="goQueueBacklog">—</div></div>
+            </div>
+            <p class="sub mono" id="goUploadTc" style="margin:.65rem 0;font-size:.72rem">—</p>
+            <div class="toolbar">
+              <button class="primary sm" id="goUploadApply">Apply boost</button>
+              <button class="sm" id="goUploadRelax">Relax boost</button>
+            </div>
+          </section>
+        </div>
+        <section class="section panel">
+          <div class="section-head"><div><h2>Packet shield</h2><p>Console / in-match / strict profiles with optional peer IP list.</p></div></div>
+          <div class="form-row">
+            <label>Level <select id="goShieldLevel">
+              <option value="normal">normal</option>
+              <option value="strict">strict</option>
+              <option value="console">console</option>
+              <option value="in-match">in-match</option>
+              <option value="peer-strict">peer-strict</option>
+            </select></label>
+            <label>Peer IPs <input type="text" id="goShieldPeers" placeholder="1.2.3.4, 5.6.7.8" style="min-width:220px"></label>
+            <button class="primary sm" id="goShieldApply">Apply shield</button>
+            <button class="sm" id="goShieldRelax">Relax shield</button>
+          </div>
+        </section>
+      </div>
+
+      <div class="subpanel" id="go-panel-connections">
+        <section class="section panel">
+          <div class="section-head"><div><h2>Connection history</h2><p>Lite DB — protect/block/investigate unknown remotes.</p></div></div>
+          <div class="form-row">
+            <label>Session <select id="goConnSession"><option value="">All</option></select></label>
+            <label>IP <input type="text" id="goConnIp" placeholder="1.2.3.4" style="width:7rem"></label>
+            <label>Type <select id="goConnType">
+              <option value="">All</option>
+              <option value="dedicated-server">dedicated-server</option>
+              <option value="p2p-mesh">p2p-mesh</option>
+              <option value="vps-probe">vps-probe</option>
+              <option value="warzone-game">warzone-game</option>
+              <option value="unknown">unknown</option>
+            </select></label>
+            <label>Policy <select id="goConnPolicy"><option value="">Any</option><option value="none">none</option><option value="protect">protect</option><option value="block">block</option></select></label>
+            <label><input type="checkbox" id="goConnOffenders"> Offenders only</label>
+            <button class="sm" id="goConnRefresh">Refresh</button>
+          </div>
+          <div class="form-row">
+            <button class="primary sm" id="goConnProtect">Protect</button>
+            <button class="sm" id="goConnBlock">Block</button>
+            <button class="sm" id="goConnNoProtect">Clear policy</button>
+            <button class="sm" id="goConnRemove">Remove row</button>
+            <button class="sm" id="goConnInvestigate">Investigate unknowns</button>
+            <span class="sub" id="goConnSelCount">0 selected</span>
+          </div>
+          <div class="form-row">
+            <button class="sm" id="goConnPrev">← Prev</button>
+            <button class="sm" id="goConnNext">Next →</button>
+            <span class="sub" id="goConnPage">Page 1</span>
+            <label>Per page <select id="goConnPageSize"><option value="25">25</option><option value="50">50</option></select></label>
+          </div>
+          <div class="table-wrap">
+            <table><thead><tr><th></th><th>IP</th><th>Type</th><th>Label</th><th>Intel</th><th>Sessions</th><th>Identical</th><th>Tiny</th><th>Last seen</th><th>Session</th><th>Policy</th></tr></thead>
+            <tbody id="goConnBody"><tr><td colspan="11" class="sub">Loading…</td></tr></tbody></table>
+          </div>
+        </section>
+        <section class="section panel">
+          <h2 style="margin:0 0 .65rem;font-size:1rem">Repeat offenders</h2>
+          <div class="table-wrap">
+            <table><thead><tr><th>IP</th><th>Sessions</th><th>Types</th><th>Label</th><th>Identical</th><th>Policy</th></tr></thead>
+            <tbody id="goConnOffendersBody"><tr><td colspan="6" class="sub">—</td></tr></tbody></table>
+          </div>
+        </section>
+      </div>
+
+      <div class="subpanel" id="go-panel-peers">
+        <section class="section panel">
+          <div class="section-head"><div><h2>Peer blocklist</h2><p>VPS / probe hosts — sync to shield for peer-strict mode.</p></div>
+            <div class="section-actions"><button class="sm" id="goPeerRefresh">Refresh</button><button class="sm" id="goPeerDecay">Decay expired</button></div>
+          </div>
+          <div class="form-row">
+            <label>Block IP <input type="text" id="goPeerIp" placeholder="203.0.113.1" style="width:9rem"></label>
+            <button class="primary sm" id="goPeerBlock">Block</button>
+            <button class="sm" id="goPeerRemove">Remove selected</button>
+            <button class="sm" id="goPeerSyncShield">Sync shield</button>
+            <span class="sub" id="goPeerSelCount">0 selected · <span id="goPeerCount">0</span> total</span>
+          </div>
+          <div class="table-wrap">
+            <table><thead><tr><th></th><th>IP</th><th>Reason</th><th>Expires</th><th>Hits</th><th>Source</th></tr></thead>
+            <tbody id="goPeerBody"><tr><td colspan="6" class="sub">Loading…</td></tr></tbody></table>
+          </div>
+        </section>
+      </div>
+
+      <div class="subpanel" id="go-panel-intel">
+        <div class="two-col">
+          <section class="section panel">
+            <div class="section-head"><div><h2>Lobby intel</h2><p>Federated bad-lobby fingerprints.</p></div></div>
+            <div class="stat-grid">
+              <div class="stat"><label>Status</label><div class="value" id="goIntelStatus">—</div></div>
+              <div class="stat"><label>Entries</label><div class="value" id="goIntelEntries">—</div></div>
+              <div class="stat"><label>Last import</label><div class="value mono" id="goIntelLast" style="font-size:.78rem">—</div></div>
+            </div>
+            <div class="toolbar" style="margin-top:.75rem">
+              <button class="sm" id="goIntelExport">Export</button>
+              <button class="sm" id="goIntelImport">Import</button>
+            </div>
+            <textarea class="policy-textarea" id="goIntelOut" placeholder="Export JSON appears here…" style="margin-top:.75rem;min-height:140px"></textarea>
+          </section>
+          <section class="section panel">
+            <div class="section-head"><div><h2>Probe sink &amp; abuse</h2><p>Honeypot hits and provider abuse reports.</p></div></div>
+            <div class="stat"><label>Events</label><div class="value" id="goProbeCount">—</div></div>
+            <div class="form-row" style="margin-top:.75rem">
+              <label>Report IP <input type="text" id="goAbuseIp" placeholder="VPS IP" style="width:9rem"></label>
+              <button class="sm" id="goAbuseGen">Generate report</button>
+              <button class="sm" id="goProbeRefresh">Refresh events</button>
+            </div>
+            <textarea class="policy-textarea" id="goAbuseOut" placeholder="Abuse report text…" style="margin-top:.65rem;min-height:100px"></textarea>
+            <div class="table-wrap" style="margin-top:.75rem">
+              <table><thead><tr><th>Time</th><th>Source</th><th>Port</th><th>Proto</th><th>Note</th></tr></thead>
+              <tbody id="goProbeBody"><tr><td colspan="5" class="sub">—</td></tr></tbody></table>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div class="subpanel" id="go-panel-innovation">
+        <div class="two-col">
+          <section class="section panel">
+            <div class="section-head"><div><h2>Match timeline</h2><p>Shield, buffer, upload, peers, and connection milestones per session.</p></div></div>
+            <div class="form-row">
+              <label>Session <select id="goTimelineSession"><option value="">Select session…</option></select></label>
+              <button class="sm" id="goTimelineRefresh">Load timeline</button>
+            </div>
+            <div class="table-wrap" style="margin-top:.65rem">
+              <table><thead><tr><th>Time</th><th>Kind</th><th>Detail</th><th>Phase</th></tr></thead>
+              <tbody id="goTimelineBody"><tr><td colspan="4" class="sub">Pick a session and load timeline</td></tr></tbody></table>
+            </div>
+          </section>
+          <section class="section panel">
+            <div class="section-head"><div><h2>Route preference</h2><p>Policy-route Xbox via dedicated gaming table for lower-latency WAN path.</p></div></div>
+            <div class="stat-grid">
+              <div class="stat"><label>Status</label><div class="value" id="goRouteActive">—</div></div>
+              <div class="stat"><label>Gateway</label><div class="value mono" id="goRouteGw">—</div></div>
+            </div>
+            <div class="form-row" style="margin-top:.75rem">
+              <label>Gateway <input type="text" id="goRouteGwIn" placeholder="auto" style="width:9rem"></label>
+              <button class="primary sm" id="goRouteApply">Apply route pref</button>
+              <button class="sm" id="goRouteClear">Clear</button>
+            </div>
+          </section>
+        </div>
+        <section class="section panel">
+          <div class="section-head"><div><h2>RQD performance</h2><p>Recursive Quadrant Deduction — <a href="https://zenodo.org/records/20942201" target="_blank" rel="noopener">Zenodo 20942201</a> polynomial search + shortcut cache.</p></div></div>
+          <div class="stat-grid">
+            <div class="stat"><label>RQD status</label><div class="value" id="goRqdEnabled">—</div></div>
+            <div class="stat"><label>Searches</label><div class="value" id="goRqdSearches">—</div></div>
+            <div class="stat"><label>Pruned</label><div class="value" id="goRqdPruned">—</div></div>
+            <div class="stat"><label>Shortcut cache</label><div class="value" id="goRqdCache">—</div></div>
+          </div>
+          <div class="toolbar" style="margin-top:.75rem">
+            <button class="sm" id="goRqdBufferRec">RQD buffer recommend</button>
+            <button class="primary sm" id="goRqdBufferApply">Apply RQD buffer</button>
+          </div>
+          <p class="sub mono" id="goRqdBufferOut" style="margin-top:.5rem">—</p>
+        </section>
+        <section class="section panel">
+          <div class="section-head"><div><h2>Dedicated-server allowlist learn</h2><p>Auto-discover /24 CIDRs from in-match dedicated-server traffic; stage then merge into in-match allowlist.</p></div></div>
+          <div class="stat-grid">
+            <div class="stat"><label>Allowlist CIDRs</label><div class="value" id="goAllowCidrCount">—</div></div>
+            <div class="stat"><label>Staged candidates</label><div class="value" id="goAllowCandCount">—</div></div>
+            <div class="stat"><label>Learned</label><div class="value" id="goAllowLearned">—</div></div>
+          </div>
+          <div class="toolbar" style="margin-top:.75rem">
+            <button class="sm" id="goAllowAnalyze">Analyze session</button>
+            <button class="primary sm" id="goAllowApply">Merge staged CIDRs</button>
+            <label><input type="checkbox" id="goAllowReloadShield"> Reload in-match shield after merge</label>
+          </div>
+          <textarea class="policy-textarea" id="goAllowOut" placeholder="Candidate CIDRs JSON…" style="margin-top:.65rem;min-height:120px"></textarea>
+        </section>
+        <section class="section panel">
+          <div class="section-head"><div><h2>ASVI void scan</h2><p>Shell-Margin void index — <a href="https://zenodo.org/records/18770016" target="_blank" rel="noopener">Zenodo 18770016</a> coverage gaps in allowlist shell.</p></div></div>
+          <div class="stat-grid">
+            <div class="stat"><label>Void cells</label><div class="value" id="goAsviVoidCount">—</div></div>
+            <div class="stat"><label>Max ASVI</label><div class="value" id="goAsviMax">—</div></div>
+            <div class="stat"><label>SMST act</label><div class="value" id="goAsviAct">—</div></div>
+            <div class="stat"><label>SMST stage</label><div class="value" id="goAsviStage">—</div></div>
+          </div>
+          <div class="toolbar" style="margin-top:.75rem">
+            <button class="sm" id="goAsviScan">Scan session voids</button>
+            <button class="sm" id="goAsviUnknown">Scan unknown voids</button>
+          </div>
+          <textarea class="policy-textarea" id="goAsviOut" placeholder="ASVI void report…" style="margin-top:.65rem;min-height:100px"></textarea>
+        </section>
+        <section class="section panel">
+          <div class="section-head"><div><h2>Pattern-based encoding</h2><p>Structural redundancy elimination — <a href="https://zenodo.org/records/18079453" target="_blank" rel="noopener">Zenodo 18079453</a> pattern RLE wire stage.</p></div></div>
+          <div class="stat-grid">
+            <div class="stat"><label>Pattern stage</label><div class="value" id="goPatEnabled">—</div></div>
+            <div class="stat"><label>Apply rate</label><div class="value" id="goPatApplyRate">—</div></div>
+            <div class="stat"><label>Avg ratio</label><div class="value" id="goPatAvgRatio">—</div></div>
+            <div class="stat"><label>Redundancy</label><div class="value" id="goPatRedundancy">—</div></div>
+          </div>
+          <div class="toolbar" style="margin-top:.75rem">
+            <button class="sm" id="goPatAnalyze">Analyze sample</button>
+            <button class="primary sm" id="goPatEncode">Encode sample</button>
+          </div>
+          <textarea class="policy-textarea" id="goPatOut" placeholder="Pattern analysis / encode result…" style="margin-top:.65rem;min-height:100px"></textarea>
+        </section>
+        <section class="section panel">
+          <div class="section-head"><div><h2>QCE integration score</h2><p>Entanglement entropy + IIT Φ — <a href="https://zenodo.org/records/17372973" target="_blank" rel="noopener">Zenodo 17372973</a> investigation prioritization.</p></div></div>
+          <div class="stat-grid">
+            <div class="stat"><label>QCE status</label><div class="value" id="goQceEnabled">—</div></div>
+            <div class="stat"><label>Entanglement S</label><div class="value mono" id="goQceEntropy">—</div></div>
+            <div class="stat"><label>Consciousness</label><div class="value" id="goQceScore">—</div></div>
+            <div class="stat"><label>Peak band</label><div class="value" id="goQcePeak">—</div></div>
+          </div>
+          <div class="toolbar" style="margin-top:.75rem">
+            <button class="sm" id="goQceMeasure">Measure session</button>
+            <button class="sm" id="goQceTelemetry">Measure telemetry</button>
+          </div>
+          <textarea class="policy-textarea" id="goQceOut" placeholder="QCE measurement…" style="margin-top:.65rem;min-height:100px"></textarea>
+        </section>
+      </div>
+
+      <div class="subpanel" id="go-panel-sentinel">
+        <section class="section panel">
+          <div class="section-head">
+            <div><h2>Warzone Sentinel</h2><p>Embedded match cockpit — verdict, traffic, feedback.</p></div>
+            <div class="section-actions">
+              <button class="sm" id="goSentinelReload">Reload</button>
+              <button class="sm" onclick="window.open('http://'+location.hostname+':8098/v1/dashboard','_blank')">Open full screen</button>
+            </div>
+          </div>
+          <iframe class="sentinel-embed" id="goSentinelFrame" title="Warzone Sentinel"></iframe>
+        </section>
+      </div>
+    </div>
+
+    <!-- ═══ POLICIES & ZONES ═══ -->
+    <div class="tab-panel" id="panel-policies" role="tabpanel">
+      <div class="two-col">
+        <section class="section panel">
+          <div class="section-head"><div><h2>Gaming policy (quick)</h2><p>Common toggles — saved to policies.json.</p></div>
+            <div class="section-actions"><button class="primary sm" id="goPolicySaveQuick">Save gaming</button></div>
+          </div>
+          <div class="form-row"><label>Xbox IP <input type="text" id="goXboxIp" style="width:10rem"></label></div>
+          <div class="form-row"><label><input type="checkbox" id="goUploadEnabled" checked> Upload assist enabled</label></div>
+          <div class="form-row"><label>Ceil factor <input type="text" id="goCeilFactor" value="0.98" style="width:4rem"></label></div>
+          <div class="form-row"><label>Kick RTT <input type="text" id="goKickRtt" value="3ms" style="width:4rem"></label>
+            <label>Desync RTT <input type="text" id="goDesyncRtt" value="5ms" style="width:4rem"></label></div>
+          <div class="form-row"><label><input type="checkbox" id="goAutoBlockPeers" checked> Auto-block VPS peers</label></div>
+          <div class="form-row"><label><input type="checkbox" id="goHoneypot" checked> Probe honeypot</label></div>
+        </section>
+        <section class="section panel">
+          <div class="section-head"><div><h2>Network zones</h2><p>Wireless ↔ trusted segmentation.</p></div></div>
+          <p class="sub" id="goZonesSummary">—</p>
+          <div class="table-wrap">
+            <table><thead><tr><th>Zone</th><th>IP</th><th>Device</th></tr></thead>
+            <tbody id="goZonesBody"><tr><td colspan="3" class="sub">Loading…</td></tr></tbody></table>
+          </div>
+        </section>
+      </div>
+      <section class="section panel">
+        <div class="section-head">
+          <div><h2>Full policies.json</h2><p>Advanced edit — reloads nft + dnsmasq on save.</p></div>
+          <div class="section-actions">
+            <button class="sm" id="goPolicyLoad">Reload</button>
+            <button class="primary sm" id="goPolicySaveJson">Save JSON</button>
+          </div>
+        </div>
+        <textarea class="policy-textarea" id="goPolicyJson" spellcheck="false"></textarea>
       </section>
     </div>
 
   <footer>
-    array-firewall <span class="mono">:8090</span> · Sentinel <span class="mono">:8098</span> · API <span class="mono">/api/v1/*</span>
+    array-firewall <span class="mono">:8090</span> · Sentinel <span class="mono">:8098</span>
   </footer>
 
   <div class="modal-backdrop" id="groupModal" hidden aria-hidden="true">
@@ -1470,11 +1991,83 @@
       return data;
     }
 
+    function storedToken() {
+      return (localStorage.getItem(tokenKey) || $('token')?.value || '').trim();
+    }
+
+    function syncTokenFields(value) {
+      ['token', 'tokenStrip', 'tokenPanel'].forEach(id => {
+        const el = $(id);
+        if (el) el.value = value;
+      });
+    }
+
+    function updateConnectUi() {
+      const connected = !!storedToken();
+      ['connectStrip', 'connectPanel'].forEach(id => {
+        const el = $(id);
+        if (el) el.hidden = connected;
+      });
+    }
+
+    function doConnect(sourceId) {
+      const src = sourceId ? $(sourceId) : null;
+      const t = (src && src.value ? src.value : '')
+        || ($('tokenStrip') && $('tokenStrip').value)
+        || ($('tokenPanel') && $('tokenPanel').value)
+        || ($('token') && $('token').value)
+        || '';
+      const trimmed = String(t).trim();
+      if (!trimmed) {
+        showConnectHint('Paste your API token in the box below, then click Connect');
+        $('tokenPanel')?.focus();
+        return;
+      }
+      localStorage.setItem(tokenKey, trimmed);
+      syncTokenFields(trimmed);
+      showError('');
+      updateConnectUi();
+      refresh();
+      startTelemetryStream();
+    }
+
     function showError(msg) {
       const el = $('error');
-      if (!msg) { el.hidden = true; el.textContent = ''; return; }
+      if (!msg) { el.hidden = true; el.textContent = ''; el.classList.remove('connect-hint'); return; }
       el.hidden = false;
+      el.classList.remove('connect-hint');
       el.textContent = msg;
+    }
+
+    function showConnectHint(msg) {
+      const el = $('error');
+      el.hidden = false;
+      el.classList.add('connect-hint');
+      el.textContent = msg;
+    }
+
+    function applyFirewallStatus(status) {
+      $('policy').innerHTML = '<span class="badge ok">Default deny · NAT</span>';
+      const role = status.role || 'lab';
+      const cut = status.cutover ? 'LIVE' : 'staged';
+      $('modeState').innerHTML = role === 'gateway' || role === 'xbox_router'
+        ? `<span class="badge ${status.cutover ? 'ok' : 'warn'}">${role === 'xbox_router' ? 'xbox router' : cut}</span>`
+        : '<span class="badge warn">lab</span>';
+      $('roleLabel').textContent = status.cutover ? 'Gateway — network exit'
+        : (role === 'xbox_router' ? 'Xbox router — DMZ NAT' : (role === 'gateway' ? 'Gateway staged' : 'Lab bench'));
+      $('allowedCount').textContent = `${(status.allowed_macs || []).length} approved · ${status.quarantine_count ?? 0} quarantined`;
+      $('natState').innerHTML = status.nat ? '<span class="badge ok">ON</span>' : '<span class="badge bad">OFF</span>';
+      const inbound = status.inbound_nat || {};
+      if (inbound.dmz && inbound.dmz.enabled && $('natState')) {
+        $('natState').innerHTML += ` <span class="badge warn">DMZ ${inbound.dmz.host_ip || ''}</span>`;
+      }
+      if (inbound.upnp && inbound.upnp.enabled && $('natState')) {
+        $('natState').innerHTML += ` <span class="badge ok">UPnP</span>`;
+      }
+      const shield = status.packet_shield || {};
+      $('shieldState').innerHTML = shield.active
+        ? `<span class="badge warn">${shield.mode || shield.level || 'on'}</span>`
+        : '<span class="badge ok">off</span>';
     }
 
     function qosTierBadge(tier) {
@@ -1894,6 +2487,24 @@
         $('foldHint').innerHTML = f.relay_url
           ? `Relay <span class="mono">${f.relay_url}</span> · ${(f.zenodo_references || []).length} papers linked · updated ${s.updated_at || '—'}`
           : `Local engine · ${(f.zenodo_references || []).length} Zenodo papers · updated ${s.updated_at || '—'}`;
+        const rqd = f.rqd || {};
+        const rs = rqd.stats || {};
+        if ($('rqdSearches')) $('rqdSearches').textContent = rs.searches != null ? String(rs.searches) : '—';
+        if ($('rqdPruned')) $('rqdPruned').textContent = rs.quadrants_pruned != null ? String(rs.quadrants_pruned) : '—';
+        if ($('rqdHitRate')) $('rqdHitRate').textContent = rqd.shortcut_hit_rate_pct != null ? `${rqd.shortcut_hit_rate_pct}%` : '—';
+        if ($('rqdReduction')) $('rqdReduction').textContent = rs.complexity_reduction_pct != null ? `${rs.complexity_reduction_pct}%` : '—';
+        const tf = f.throughput_fold || {};
+        const tfs = tf.stats || {};
+        if ($('tpLinkMbps')) $('tpLinkMbps').textContent = tf.link_mbps != null ? String(tf.link_mbps) : '—';
+        if ($('tpEffectiveMbps')) $('tpEffectiveMbps').textContent = tf.effective_throughput_mbps != null ? String(tf.effective_throughput_mbps) : '—';
+        if ($('tpAvgRatio')) $('tpAvgRatio').textContent = tfs.avg_ratio != null ? `${tfs.avg_ratio}×` : '—';
+        if ($('tpPreservation')) $('tpPreservation').textContent = tf.pipeline ? 'fold+BLsb' : '—';
+        const pe = f.pattern_encode || {};
+        const pes = pe.stats || {};
+        if ($('patStageEnabled')) $('patStageEnabled').textContent = pe.enabled ? 'on' : 'off';
+        if ($('patApplyRate')) $('patApplyRate').textContent = pe.apply_rate_pct != null ? `${pe.apply_rate_pct}%` : '—';
+        if ($('patAvgRatio')) $('patAvgRatio').textContent = pes.avg_ratio != null ? `${pes.avg_ratio}×` : '—';
+        if ($('patRedundancy')) $('patRedundancy').textContent = pe.pipeline_stage || 'pattern_rle';
       } catch (e) {
         $('foldHint').textContent = 'Folding status unavailable';
       }
@@ -2344,12 +2955,36 @@
       } catch (e) { setText(['perfCc', 'perfCcG'], 'error'); }
     }
 
+    async function refreshDns() {
+      if (!$('dnsEnabled')) return;
+      try {
+        const d = await api('/api/v1/dns/status');
+        $('dnsEnabled').checked = !!d.enabled;
+        $('dnsForce').checked = d.force_lan_dns !== false;
+        $('dnsBlockDoh').checked = d.block_doh_dot !== false;
+        $('dnsDomainCount').textContent = d.domain_count != null ? String(d.domain_count) : '—';
+        $('dnsSyncedAt').textContent = d.synced_at || '—';
+        $('dnsBlocklistState').innerHTML = d.blocklist_active
+          ? '<span class="badge ok">active</span>' : '<span class="badge warn">empty</span>';
+        if (d.custom_domains && d.custom_domains.length) {
+          $('dnsCustom').value = d.custom_domains.join('\n');
+        }
+        if ($('dnsHint') && d.doh_resolvers_blocked) {
+          $('dnsHint').textContent = `Force gateway DNS · block DoH to ${d.doh_resolvers_blocked.slice(0, 4).join(', ')}…`;
+        }
+      } catch (e) { /* optional until deployed */ }
+    }
+
     async function refreshSecurity() {
       if (!$('idsMode')) return;
       try {
         const s = await api('/api/v1/ids/summary');
-        $('idsMode').innerHTML = s.mode === 'log_only'
-          ? '<span class="badge ok">Log only</span>' : `<span class="badge warn">${s.mode || '—'}</span>`;
+        const mode = s.mode || 'log_only';
+        const modeCls = mode === 'log_only' ? 'ok' : (mode === 'alert' ? 'warn' : 'bad');
+        $('idsMode').innerHTML = `<span class="badge ${modeCls}">${mode.replace('_', ' ')}</span>`;
+        if ($('idsModeSelect')) $('idsModeSelect').value = mode;
+        const enf = s.enforcement || {};
+        if ($('idsBlockedCount')) $('idsBlockedCount').textContent = enf.blocked_count != null ? String(enf.blocked_count) : '0';
         $('idsLastScan').textContent = s.last_scan || '—';
         $('idsFlowCount').textContent = s.flow_count != null ? s.flow_count : '—';
         $('idsEventTotal').textContent = s.total_events != null ? s.total_events : '0';
@@ -2405,6 +3040,17 @@
           label: r.framework || 'NIST',
           detail: `${r.description || ''} Signals: ${(r.signals || []).join(', ')}`,
         })).join('');
+
+        const ifc = s.information_flow || {};
+        if ($('ifcLastFlow')) $('ifcLastFlow').textContent = ifc.last_flow_bits != null ? `${ifc.last_flow_bits} bits` : '—';
+        if ($('ifcTotalFlow')) $('ifcTotalFlow').textContent = ifc.total_flow_bits != null ? `${ifc.total_flow_bits} bits` : '—';
+        if ($('ifcSteps')) $('ifcSteps').textContent = ifc.steps != null ? ifc.steps : '—';
+        if ($('ifcAvgFlow')) $('ifcAvgFlow').textContent = ifc.avg_flow_bits != null ? `${ifc.avg_flow_bits} bits` : '—';
+        if ($('ifcPeakFlow')) $('ifcPeakFlow').textContent = ifc.peak_flow_bits != null ? `${ifc.peak_flow_bits} bits` : '—';
+        const la = ifc.last_analysis || {};
+        if ($('ifcHint') && la.superlinear_flow) {
+          $('ifcHint').textContent = `Super-linear flow detected: ${la.flow_bits} bits/step (pigeonhole bound ${la.pigeonhole_min_flow})`;
+        }
       } catch (e) {
         if ($('idsAiSummary')) $('idsAiSummary').textContent = 'Security module unavailable — ' + e.message;
       }
@@ -2413,19 +3059,29 @@
     async function refreshSentinel() {
       if (!$('sentVerdict')) return;
       try {
-        const s = await api('/api/v1/sentinel/summary');
+        const [s, ddRes] = await Promise.all([
+          api('/api/v1/sentinel/summary'),
+          api('/api/v1/sentinel/dashboard-data').catch(() => ({})),
+        ]);
+        const dd = ddRes.data || ddRes;
         const live = s.ok !== false && !s.error;
         const statusHtml = live ? `<span class="badge ok">${s.mode || 'watching'}</span>` : `<span class="badge bad">${s.error || 'offline'}</span>`;
         setHtml(['sentSentinelStatus', 'sentSentinelStatusG'], statusHtml);
-        const v = (s.verdict || '—').toUpperCase();
+        const v = (dd.verdict || s.verdict || '—').toUpperCase();
         const vClass = v.includes('CRITICAL') || v.includes('LIKELY') ? 'bad' : (v.includes('POSSIBLE') ? 'warn' : 'ok');
         const verdictHtml = v === '—' ? '—' : `<span class="badge ${vClass}">${v}</span>`;
         setHtml(['sentVerdict', 'sentVerdictG'], verdictHtml);
-        setText(['sentPhase', 'sentPhaseG'], s.phase || '—');
+        const phase = (dd.session && dd.session.phase) || s.phase || '—';
+        setText(['sentPhase', 'sentPhaseG'], phase);
         setText(['sentConns', 'sentConnsG'], s.connections != null ? s.connections : '—');
-        const ng = s.network_guard || {};
-        const guardHtml = ng.packet_shield_active
-          ? `<span class="badge warn">${ng.mitigation || 'shield'}</span>` : `<span class="badge ok">${ng.mitigation || 'standby'}</span>`;
+        const ng = dd.network_guard || s.network_guard || {};
+        const ua = ng.upload_assist || {};
+        const guardParts = [ng.mode || 'idle'];
+        if (ua.active) guardParts.push('upload boost');
+        if ((ng.packet_shield || {}).in_match_mode) guardParts.push('in-match shield');
+        const guardHtml = ng.engage || ua.active
+          ? `<span class="badge warn">${guardParts.join(' · ')}</span>`
+          : `<span class="badge ok">${ng.mitigation || 'standby'}</span>`;
         $('sentGuard').innerHTML = guardHtml;
         $('sentPollsXbox').textContent = `${s.polls != null ? s.polls : '—'} · ${s.xbox_ip || '—'}`;
       } catch (e) { setHtml(['sentSentinelStatus', 'sentSentinelStatusG'], '<span class="badge bad">error</span>'); }
@@ -2445,7 +3101,8 @@
         $('pfCount').textContent = String(n.port_forward_count ?? 0);
         const up = n.upnp || {};
         $('upnpEnabled').checked = up.enabled !== false;
-        $('upnpSecure').checked = !!up.secure_mode;
+        $('upnpSecure').checked = up.secure_mode !== false;
+        if ($('upnpXboxOnly')) $('upnpXboxOnly').checked = !!up.xbox_only;
         $('upnpState').innerHTML = up.enabled
           ? (up.running ? '<span class="badge ok">running</span>' : '<span class="badge bad">stopped</span>')
           : '<span class="badge warn">disabled</span>';
@@ -2491,33 +3148,35 @@
 
     let refreshInFlight = false;
 
+    async function refreshPublicOverview() {
+      try {
+        const res = await fetch('/api/v1/firewall/status');
+        const status = await res.json();
+        if (!res.ok) {
+          if (res.status === 403) showConnectHint('Dashboard blocked from this network — connect from 192.168.167.x or 192.168.5.x');
+          return;
+        }
+        applyFirewallStatus(status);
+      } catch (_) { /* ignore */ }
+    }
+
+    async function refreshShieldStatusPublic() {
+      return refreshPublicOverview();
+    }
+
     async function refresh() {
       if (refreshInFlight) return;
       const t = localStorage.getItem(tokenKey) || $('token').value.trim();
-      if (!t) { showError('Paste API token and click Connect'); return; }
+      if (!t) {
+        showConnectHint('View-only — use the Connect box below to paste your API token');
+        await refreshPublicOverview();
+        return;
+      }
       refreshInFlight = true;
       showError('');
       try {
         const status = await api('/api/v1/firewall/status');
-        $('policy').innerHTML = '<span class="badge ok">Default deny · NAT</span>';
-        const role = status.role || 'lab';
-        const cut = status.cutover ? 'LIVE' : 'staged';
-        $('modeState').innerHTML = role === 'gateway'
-          ? `<span class="badge ${status.cutover ? 'ok' : 'warn'}">${cut}</span>`
-          : '<span class="badge warn">lab</span>';
-        $('roleLabel').textContent = status.cutover ? 'Gateway — network exit'
-          : (role === 'gateway' ? 'Gateway staged' : 'Lab bench');
-        $('allowedCount').textContent = `${(status.allowed_macs || []).length} approved · ${status.quarantine_count ?? 0} quarantined`;
-        $('natState').innerHTML = status.nat ? '<span class="badge ok">ON</span>' : '<span class="badge bad">OFF</span>';
-        const inbound = status.inbound_nat || {};
-        if (inbound.dmz && inbound.dmz.enabled && $('natState')) {
-          $('natState').innerHTML += ` <span class="badge warn">DMZ ${inbound.dmz.host_ip || ''}</span>`;
-        }
-        if (inbound.upnp && inbound.upnp.enabled && $('natState')) {
-          $('natState').innerHTML += ` <span class="badge ok">UPnP</span>`;
-        }
-        const shield = status.packet_shield || {};
-        $('shieldState').innerHTML = shield.active ? `<span class="badge warn">${shield.mode || 'on'}</span>` : '<span class="badge ok">off</span>';
+        applyFirewallStatus(status);
         await Promise.all([
           refreshSentinel(),
           refreshPerf(),
@@ -2525,7 +3184,9 @@
           refreshFolding(),
           refreshDhcp(),
           refreshNat(),
+          refreshDns(),
           refreshSecurity(),
+          window.ArrayFwGamingOps ? ArrayFwGamingOps.refreshAll() : Promise.resolve(),
         ]);
         const [grp, dev] = await Promise.all([
           api('/api/v1/groups'),
@@ -2578,13 +3239,51 @@
       try { await api('/api/v1/firewall/reload', { method: 'POST', body: '{}' }); await refreshNat(); }
       catch (e) { showError(e.message); }
     });
+    on('natUpnpXboxSecure', async () => {
+      try {
+        await api('/api/v1/nat/upnp/xbox-secure', { method: 'POST', body: '{}' });
+        await refreshNat();
+      } catch (e) { showError(e.message); }
+    });
     on('upnpSave', async () => {
       try {
         await api('/api/v1/nat/upnp', { method: 'POST', body: JSON.stringify({
           enabled: $('upnpEnabled').checked,
           secure_mode: $('upnpSecure').checked,
+          xbox_only: $('upnpXboxOnly') ? $('upnpXboxOnly').checked : undefined,
         })});
         await refreshNat();
+      } catch (e) { showError(e.message); }
+    });
+    on('dnsSync', async () => {
+      try {
+        if ($('dnsHint')) $('dnsHint').textContent = 'Syncing blocklists…';
+        await api('/api/v1/dns/sync', { method: 'POST', body: '{}' });
+        await refreshDns();
+      } catch (e) { showError(e.message); }
+    });
+    on('dnsSave', async () => {
+      try {
+        const custom = $('dnsCustom').value.split('\n').map(s => s.trim()).filter(Boolean);
+        await api('/api/v1/dns/config', { method: 'POST', body: JSON.stringify({
+          enabled: $('dnsEnabled').checked,
+          force_lan_dns: $('dnsForce').checked,
+          block_doh_dot: $('dnsBlockDoh').checked,
+          custom_domains: custom,
+        })});
+        await refreshDns();
+      } catch (e) { showError(e.message); }
+    });
+    on('idsModeSave', async () => {
+      try {
+        await api('/api/v1/ids/mode', { method: 'POST', body: JSON.stringify({ mode: $('idsModeSelect').value }) });
+        await refreshSecurity();
+      } catch (e) { showError(e.message); }
+    });
+    on('idsClearBlocks', async () => {
+      try {
+        await api('/api/v1/ids/clear-blocks', { method: 'POST', body: '{}' });
+        await refreshSecurity();
       } catch (e) { showError(e.message); }
     });
     on('pfAdd', async () => {
@@ -2611,7 +3310,13 @@
         await refresh();
       } catch (e) { showError(e.message); }
     });
-    on('saveToken', () => { localStorage.setItem(tokenKey, $('token').value.trim()); refresh(); startTelemetryStream(); });
+    on('saveToken', () => doConnect('token'));
+    on('saveTokenStrip', () => doConnect('tokenStrip'));
+    on('saveTokenPanel', () => doConnect('tokenPanel'));
+    ['token', 'tokenStrip', 'tokenPanel'].forEach(id => {
+      const el = $(id);
+      if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') doConnect(id); });
+    });
     on('refresh', refresh);
     on('telRefresh', async () => { startTelemetryStream(); await refreshTelemetryFull(); });
     on('idsScan', async () => {
@@ -2621,18 +3326,60 @@
         await refreshSecurity();
       } catch (e) { showError(e.message); }
     });
+    on('ifcAnalyze', async () => {
+      try {
+        if ($('ifcHint')) $('ifcHint').textContent = 'Computing Flow(M,x,t)…';
+        await api('/api/v1/information-flow/analyze', { method: 'POST', body: '{}' });
+        await refreshSecurity();
+      } catch (e) { showError(e.message); }
+    });
     on('idsApplyQos', async () => {
       try {
         await api('/api/v1/qos/apply', { method: 'POST', body: '{}' });
-        showError('Priority QoS applied'); setTimeout(() => showError(''), 2500);
+        await api('/api/v1/traffic/priority');
+        showError('QoS tiers reapplied · priority map refreshed');
+        setTimeout(() => showError(''), 2500);
         await refreshSecurity();
       } catch (e) { showError(e.message); }
     });
     on('discover', async () => { try { await api('/api/v1/firewall/discover', { method: 'POST', body: '{}' }); await refresh(); } catch (e) { showError(e.message); } });
     on('reloadRules', async () => { try { await api('/api/v1/firewall/reload', { method: 'POST', body: '{}' }); await refresh(); } catch (e) { showError(e.message); } });
-    onAll(['shieldOn', 'shieldOnG'], async () => { try { await api('/api/v1/shield/enable', { method: 'POST', body: JSON.stringify({ level: 'normal' }) }); await refresh(); } catch (e) { showError(e.message); } });
-    onAll(['shieldOff', 'shieldOffG'], async () => { try { await api('/api/v1/shield/relax', { method: 'POST', body: '{}' }); await refresh(); } catch (e) { showError(e.message); } });
+    async function enableShield(level) {
+      const t = localStorage.getItem(tokenKey) || $('token').value.trim();
+      if (!t) { showError('Paste API token and click Connect first'); return; }
+      try {
+        const r = await api('/api/v1/shield/enable', { method: 'POST', body: JSON.stringify({ level: level || 'normal' }) });
+        if (r.ok === false) throw new Error(r.error || r.stderr || 'Shield enable failed');
+        showError(`Packet shield: ${level || 'normal'}`);
+        setTimeout(() => showError(''), 2500);
+        await refreshShieldStatusPublic();
+        await refresh();
+      } catch (e) { showError(e.message === 'unauthorized' ? 'Invalid API token — paste token and click Connect' : e.message); }
+    }
+    onAll(['shieldOn', 'shieldOnG'], async () => {
+      const level = ($('shieldLevelOverview') || {}).value || ($('shieldLevelG') || {}).value || 'normal';
+      await enableShield(level);
+    });
+    onAll(['shieldOff', 'shieldOffG'], async () => {
+      const t = localStorage.getItem(tokenKey) || $('token').value.trim();
+      if (!t) { showError('Paste API token and click Connect first'); return; }
+      try {
+        const r = await api('/api/v1/shield/relax', { method: 'POST', body: '{}' });
+        if (r.ok === false) throw new Error(r.error || r.stderr || 'Shield relax failed');
+        showError('Packet shield relaxed');
+        setTimeout(() => showError(''), 2500);
+        await refreshShieldStatusPublic();
+        await refresh();
+      } catch (e) { showError(e.message === 'unauthorized' ? 'Invalid API token — paste token and click Connect' : e.message); }
+    });
     onAll(['sentinelOpen', 'sentinelOpenG'], () => window.open(`http://${location.hostname}:8098/v1/dashboard`, '_blank', 'noopener'));
+    on('sentinelEmbed', () => {
+      const wrap = $('sentinelEmbedWrap');
+      const frame = $('sentinelFrameOverview');
+      if (!wrap || !frame) return;
+      wrap.hidden = !wrap.hidden;
+      if (!wrap.hidden && !frame.src) frame.src = `http://${location.hostname}:8098/v1/dashboard`;
+    });
     onAll(['sentinelSync', 'sentinelSyncG'], async () => { try { await api('/api/v1/sentinel/sync', { method: 'POST', body: JSON.stringify({ restart: true }) }); await refresh(); } catch (e) { showError(e.message); } });
     on('foldProbe', async () => {
       try {
@@ -2648,9 +3395,28 @@
         showError('Folding stats reset'); setTimeout(() => showError(''), 2500);
       } catch (e) { showError(e.message); }
     });
+    on('tpEstimateBtn', async () => {
+      try {
+        const sample = JSON.stringify({ probe: true, ts: Date.now(), connections: Array.from({ length: 40 }, (_, i) => ({ ip: `203.0.113.${i}`, hit_count: i + 1 })) });
+        const r = await api('/api/v1/folding/throughput/estimate', { method: 'POST', body: JSON.stringify({ payload: sample }) });
+        showError(`Wire fold: ${r.ratio}× → effective ${r.effective_throughput_mbps} Mbps (σ=${r.preservation_ratio})`);
+        setTimeout(() => showError(''), 4000);
+        await refresh();
+      } catch (e) { showError(e.message); }
+    });
+    on('patAnalyzeBtn', async () => {
+      try {
+        const sample = JSON.stringify({ probe: true, ts: Date.now(), connections: Array.from({ length: 40 }, (_, i) => ({ ip: `203.0.113.${i}`, hit_count: i + 1 })) });
+        const r = await api('/api/v1/folding/pattern/encode', { method: 'POST', body: JSON.stringify({ payload: sample, analyze_only: true }) });
+        const a = r.analysis || {};
+        showError(`Pattern redundancy ${a.structural_redundancy_pct}% · repeat ${a.repeat_block_ratio} · runs ${a.run_density}`);
+        setTimeout(() => showError(''), 4000);
+      } catch (e) { showError(e.message); }
+    });
     onAll(['perfApply', 'perfApplyG'], async () => {
       try {
-        await api('/api/v1/stability/apply', { method: 'POST', body: JSON.stringify({ autorate_first: false }) });
+        await api('/api/v1/perf/apply', { method: 'POST', body: '{}' });
+        showError('Perf stack applied'); setTimeout(() => showError(''), 2500);
         await refresh();
       } catch (e) { showError(e.message); }
     });
@@ -2732,13 +3498,48 @@
       } catch (e) { showError(e.message); }
     });
 
+    /* Gaming ops subtabs */
+    (function initGoSubtabs() {
+      const tabs = document.querySelectorAll('#goSubtabs .subtab');
+      const panels = document.querySelectorAll('[id^="go-panel-"]');
+      tabs.forEach(t => t.addEventListener('click', () => {
+        tabs.forEach(x => x.classList.toggle('active', x === t));
+        panels.forEach(p => p.classList.toggle('active', p.id === 'go-panel-' + t.dataset.go));
+        if (t.dataset.go === 'sentinel' && window.ArrayFwGamingOps) ArrayFwGamingOps.refreshSentinelEmbed();
+      }));
+    })();
+
+    const tabKeyMain = 'array-fw-tab';
+    document.querySelectorAll('.tab').forEach(t => {
+      t.addEventListener('click', () => {
+        if (t.dataset.tab === 'gaming-ops' && window.ArrayFwGamingOps) {
+          ArrayFwGamingOps.refreshSentinelEmbed();
+        }
+      });
+    });
+
     $('token').value = localStorage.getItem(tokenKey) || '';
+    syncTokenFields($('token').value);
+    updateConnectUi();
     setInterval(() => { $('clock').textContent = new Date().toLocaleString(); }, 1000);
     bindSortHeaders();
     bindTelSortHeaders();
+    refreshShieldStatusPublic();
     refresh();
     startTelemetryLive();
     setInterval(refresh, 30000);
+  </script>
+  <script src="/static/gaming-ops.js"></script>
+  <script>
+    if (window.ArrayFwGamingOps) {
+      ArrayFwGamingOps.init({
+        api,
+        $,
+        showError,
+        toast: (msg) => { showError(msg); setTimeout(() => showError(''), 2500); },
+      });
+      ArrayFwGamingOps.refreshAll();
+    }
   </script>
 </body>
 </html>

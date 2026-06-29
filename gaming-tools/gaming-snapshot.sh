@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-shot JSON snapshot for Xbox traffic monitoring (runs on Firewalla).
+# One-shot JSON snapshot for Xbox traffic monitoring (runs on array-firewall gateway).
 set -euo pipefail
 
 TOOLS_DIR="${TOOLS_DIR:-/opt/array-firewall/gaming-tools}"
@@ -74,24 +74,24 @@ if pressure_mode == "normal" and mem_available_mb is not None:
 
 LIMITS = {
     "normal": {
-        "conn": 40,
-        "dest": 50,
-        "flows": 20,
-        "top": 15,
+        "conn": 96,
+        "dest": 80,
+        "flows": 32,
+        "top": 20,
         "ping": 999,
         "tcpdump": True,
         "conntrack": True,
-        "redis_flows": 19,
+        "redis_flows": 32,
     },
     "minimal": {
-        "conn": 8,
-        "dest": 12,
-        "flows": 5,
-        "top": 5,
-        "ping": 4,
+        "conn": 32,
+        "dest": 24,
+        "flows": 12,
+        "top": 8,
+        "ping": 8,
         "tcpdump": False,
         "conntrack": True,
-        "redis_flows": 5,
+        "redis_flows": 12,
     },
     "critical": {
         "conn": 8,
@@ -105,6 +105,9 @@ LIMITS = {
     },
 }
 lim = LIMITS[pressure_mode]
+if deep_packets and pressure_mode == "minimal":
+    lim = dict(lim)
+    lim["tcpdump"] = True
 
 NETBOT_URL = os.environ.get("NETBOT_BRIDGE_URL", "http://127.0.0.1:8836")
 
@@ -575,6 +578,30 @@ for addr in target_addrs:
         parsed.update(info)
         connections.append(parsed)
 
+def parse_conntrack_tuples(line):
+    return re.findall(
+        r"src=(\S+)\s+dst=(\S+)(?:\s+sport=(\S+)\s+dport=(\S+))?",
+        line,
+    )
+
+
+def append_conntrack_connection(proto, state, local, remote, direction):
+    dedupe = (proto, local, remote, direction, state)
+    if dedupe in seen:
+        return
+    seen.add(dedupe)
+    info = enrich_remote(remote, proto=proto)
+    connections.append({
+        "proto": proto,
+        "state": state,
+        "local": local,
+        "remote": remote,
+        "direction": direction,
+        "host": info["hostname"],
+        "service": "",
+        **info,
+    })
+
 grep_re = "|".join(re.escape(addr) for addr in target_addrs)
 if lim["conntrack"]:
     ct_out = run(["bash", "-lc", f"conntrack -L 2>/dev/null | grep -E '{grep_re}'"], timeout=10)
@@ -588,38 +615,31 @@ if lim["conntrack"]:
         state = ""
         if proto == "tcp" and len(parts) > 3 and "=" not in parts[3]:
             state = parts[3]
-        tuple_m = re.search(
-            r"src=(\S+)\s+dst=(\S+)(?:\s+sport=(\S+)\s+dport=(\S+))?",
-            line,
-        )
-        if not tuple_m:
+        tuples = parse_conntrack_tuples(line)
+        if not tuples:
             continue
-        src, dst, sport, dport = tuple_m.group(1), tuple_m.group(2), tuple_m.group(3) or "", tuple_m.group(4) or ""
-        if addr_match(src, target_addrs):
-            remote = f"{dst}:{dport}" if dport else dst
-            direction = "out"
-            local = f"{src}:{sport}" if sport else src
-        elif addr_match(dst, target_addrs):
-            remote = f"{src}:{sport}" if sport else src
-            direction = "in"
-            local = f"{dst}:{dport}" if dport else dst
-        else:
-            continue
-        dedupe = (proto, local, remote, state)
-        if dedupe in seen:
-            continue
-        seen.add(dedupe)
-        info = enrich_remote(remote, proto=proto)
-        connections.append({
-            "proto": proto,
-            "state": state,
-            "local": local,
-            "remote": remote,
-            "direction": direction,
-            "host": info["hostname"],
-            "service": "",
-            **info,
-        })
+
+        orig_src, orig_dst, orig_sport, orig_dport = tuples[0]
+        xbox_is_orig_src = addr_match(orig_src, target_addrs)
+        xbox_is_orig_dst = addr_match(orig_dst, target_addrs)
+
+        if xbox_is_orig_src:
+            remote = f"{orig_dst}:{orig_dport}" if orig_dport else orig_dst
+            local = f"{orig_src}:{orig_sport}" if orig_sport else orig_src
+            append_conntrack_connection(proto, state, local, remote, "out")
+
+        if xbox_is_orig_dst:
+            remote = f"{orig_src}:{orig_sport}" if orig_sport else orig_src
+            local = f"{orig_dst}:{orig_dport}" if orig_dport else orig_dst
+            append_conntrack_connection(proto, state, local, remote, "in")
+
+        # NAT reply tuple (WAN-side dst) — orig was Xbox outbound, reply is inbound.
+        if xbox_is_orig_src and len(tuples) >= 2:
+            rep_src, rep_dst, rep_sport, rep_dport = tuples[1]
+            if rep_src and rep_dport:
+                remote = f"{rep_src}:{rep_sport}" if rep_sport else rep_src
+                local = f"{orig_src}:{rep_dport}"
+                append_conntrack_connection(proto, state, local, remote, "in")
 
 dns_destinations = []
 dns_by_host = {}
@@ -798,12 +818,22 @@ if online and lim["tcpdump"]:
                 "localPort": pkt["localPort"],
             }
             if classify_remote_role:
-                rec["roleId"] = classify_remote_role(
-                    remote,
-                    "",
-                    pkt.get("remotePort"),
-                    pkt.get("proto") or "",
-                )
+                from sentinel.enrich import classify_inbound_endpoint
+
+                if direction == "in":
+                    rec["roleId"] = classify_inbound_endpoint(
+                        remote,
+                        "",
+                        pkt.get("remotePort"),
+                        pkt.get("proto") or "",
+                    )
+                else:
+                    rec["roleId"] = classify_remote_role(
+                        remote,
+                        "",
+                        pkt.get("remotePort"),
+                        pkt.get("proto") or "",
+                    )
             if pkt["flags"]:
                 rec["flags"] = pkt["flags"]
             packet_records.append(rec)
@@ -1030,7 +1060,8 @@ if wan_probe_host:
 
 conn_slice = connections[: lim["conn"]]
 dest_slice = destinations[: lim["dest"]]
-conn_items = [trim_conn(c) for c in conn_slice] if pressure_mode != "normal" else conn_slice[: lim["conn"]]
+conn_items = [trim_conn(c) for c in conn_slice] if pressure_mode != "normal" else list(conn_slice)
+conn_truncated = len(connections) > len(conn_items)
 
 payload = {
     "timestamp": now,
@@ -1052,6 +1083,9 @@ payload = {
         "online": online,
         "arpMac": arp_mac,
         "arpState": arp_state,
+        "path": "wired-moca",
+        "pathLabel": "Wired · MoCA",
+        "lanLatencyMs": latency_map.get(target_ip),
         "netbot": trim_host_profile(netbot_host),
     },
     "sample": {
@@ -1064,6 +1098,8 @@ payload = {
     },
     "connections": {
         "count": len(connections),
+        "itemsShown": len(conn_items),
+        "truncated": conn_truncated,
         "items": conn_items,
         "source": "redis+conntrack" if lim["conntrack"] else "redis",
     },
