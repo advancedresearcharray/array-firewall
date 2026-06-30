@@ -1,0 +1,21 @@
+{
+  "name": "mesh_clique_subnet",
+  "session_hex": "golden_mesh",
+  "phase": "in-match",
+  "expect": {
+    "verdict": "hostile",
+    "min_subnet_actions": 0
+  },
+  "payload": {
+    "phase": "in-match",
+    "cheater_label": "LIKELY",
+    "session_hex": "golden_mesh",
+    "peer_tracker": {
+      "peers": [
+        {"ip": "45.76.10.1", "identical_count": 18, "vps_probe": true, "packet_size_min": 64, "packet_size_max": 64},
+        {"ip": "45.76.10.2", "identical_count": 16, "vps_probe": true, "packet_size_min": 64, "packet_size_max": 64},
+        {"ip": "45.76.10.3", "identical_count": 14, "vps_probe": false, "packet_size_min": 64, "packet_size_max": 64}
+      ]
+    }
+  }
+}

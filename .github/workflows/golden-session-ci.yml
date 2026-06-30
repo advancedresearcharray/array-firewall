@@ -1,0 +1,41 @@
+name: Golden session CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'api/**'
+      - 'scripts/golden-session-ci.py'
+      - 'tests/fixtures/golden-sessions/**'
+      - '.github/workflows/golden-session-ci.yml'
+  pull_request:
+    paths:
+      - 'api/**'
+      - 'scripts/golden-session-ci.py'
+      - 'tests/fixtures/golden-sessions/**'
+  workflow_dispatch:
+
+jobs:
+  golden-sessions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Scaffold policies for replay
+        run: |
+          sudo mkdir -p /var/lib/array-firewall /etc/array-firewall
+          sudo cp config/policies.json.example /var/lib/array-firewall/policies.json
+          sudo cp config/array-firewall.conf /etc/array-firewall/array-firewall.conf
+          sudo mkdir -p /var/lib/array-firewall
+          echo '{"version":1,"devices":{}}' | sudo tee /var/lib/array-firewall/devices.json >/dev/null
+
+      - name: Replay golden sessions (observe)
+        run: python3 scripts/golden-session-ci.py --mode observe
+
+      - name: Replay golden sessions (assist)
+        run: python3 scripts/golden-session-ci.py --mode assist

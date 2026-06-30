@@ -347,6 +347,11 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/v1/cutover/dry-run":
             json_response(self, 200, cutover.dry_run())
             return
+        if path == "/api/v1/hardening/status":
+            from lib import hardening
+
+            json_response(self, 200, hardening.status())
+            return
         if path == "/api/v1/dhcp":
             json_response(self, 200, dhcp.status())
             return
@@ -1179,9 +1184,42 @@ class Handler(BaseHTTPRequestHandler):
                 200,
                 {
                     "ok": True,
-                    "message": "Gateway staged; run cutover-gateway.sh when ISP/LAN wired",
+                    "message": "Gateway staged; run execute when ISP/LAN wired",
                     "doc": "/opt/array-firewall/docs/CUTOVER.md",
+                    "next": "POST /api/v1/cutover/execute {\"confirm\": true}",
                 },
+            )
+            return
+
+        if path == "/api/v1/cutover/execute":
+            confirm = bool(body.get("confirm"))
+            json_response(
+                self,
+                200,
+                cutover.execute(
+                    confirm=confirm,
+                    lan_gateway=str(body.get("lan_gateway") or "").strip() or None,
+                    force=bool(body.get("force")),
+                ),
+            )
+            return
+
+        if path == "/api/v1/cutover/rollback":
+            json_response(
+                self,
+                200,
+                cutover.rollback(confirm=bool(body.get("confirm")), force=bool(body.get("force"))),
+            )
+            return
+
+        if path == "/api/v1/hardening/apply":
+            from lib import hardening
+
+            stage = str(body.get("stage") or "full")
+            json_response(
+                self,
+                200,
+                hardening.apply(stage=stage, force=bool(body.get("force"))),
             )
             return
 

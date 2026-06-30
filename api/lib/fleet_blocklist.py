@@ -100,6 +100,50 @@ def scheduled_pull(url: str, *, merge_policy: str = "merge") -> dict[str, Any]:
     return result
 
 
+def push_to_url(url: str, *, timeout: float = 20.0) -> dict[str, Any]:
+    """HTTP PUT/POST fleet bundle to peer node."""
+    import urllib.error
+    import urllib.request
+
+    export = export_bundle()
+    path = Path(export.get("path") or EXPORT_FILE)
+    if not path.is_file():
+        return {"ok": False, "error": "export missing"}
+    body = path.read_bytes()
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "X-Array-Fleet-Format": "array-firewall-fleet-v1",
+    }
+    token = (policies.load().get("ai_ops") or {}).get("fleet_export_token")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(url, data=body, method="PUT", headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            detail = resp.read(4096).decode("utf-8", errors="replace")
+        return {"ok": True, "url": url, "status": resp.status, "sha256": export.get("sha256"), "detail": detail[:500]}
+    except urllib.error.HTTPError as exc:
+        return {"ok": False, "url": url, "error": str(exc), "status": exc.code}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "url": url, "error": str(exc)}
+
+
+def sync_cycle() -> dict[str, Any]:
+    """Export, optional push, optional pull — used by systemd timer."""
+    cfg = policies.load().get("ai_ops") or {}
+    if not cfg.get("fleet_sync_enabled", True):
+        return {"ok": True, "skipped": True, "reason": "fleet_sync disabled"}
+    out: dict[str, Any] = {"ok": True, "export": export_bundle()}
+    export_url = str(cfg.get("fleet_export_url") or "").strip()
+    if export_url:
+        out["push"] = push_to_url(export_url)
+    pull_url = str(cfg.get("fleet_pull_url") or "").strip()
+    if pull_url:
+        out["pull"] = scheduled_pull(pull_url, merge_policy=str(cfg.get("fleet_merge_policy") or "merge"))
+    return out
+
+
 def status() -> dict[str, Any]:
     cfg = policies.load().get("ai_ops") or {}
     exp = {}

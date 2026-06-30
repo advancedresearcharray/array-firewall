@@ -1,0 +1,9 @@
+[Unit]
+Description=Array Firewall fleet blocklist sync
+After=array-firewall-api.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/array-firewall/scripts/fleet-sync.py
+Nice=10

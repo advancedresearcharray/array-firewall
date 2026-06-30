@@ -374,10 +374,10 @@ def _fuse_context(*, sentinel_payload: dict[str, Any] | None = None) -> dict[str
     except Exception:
         pass
 
-    if cfg.get("game_state_fusion_enabled", True):
-        game_state_fusion.fuse(ctx, payload, bump=bump, weights=weights)
     if cfg.get("killcam_binding_enabled", True):
         killcam_binding.apply_to_context(ctx, payload, bump=bump)
+    if cfg.get("game_state_fusion_enabled", True):
+        game_state_fusion.fuse(ctx, payload, bump=bump, weights=weights)
 
     peer_rows_mesh = _extract_peer_rows(payload)
     if peer_rows_mesh and cfg.get("mesh_reputation_enabled", True):
@@ -1044,6 +1044,9 @@ def tick(
             "fused_verdict": context.get("fused_verdict"),
             "signals": context.get("signals"),
             "tiny_packet_only": context.get("tiny_packet_only"),
+            "killcam_bindings": context.get("killcam_bindings"),
+            "mesh_reputation": context.get("mesh_reputation"),
+            "pre_burst_forecast": context.get("pre_burst_forecast"),
         },
         "plan": plan,
         "execution": execution,

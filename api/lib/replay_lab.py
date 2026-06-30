@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import json
 import time
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from . import ai_ops, policies
 
@@ -12,6 +13,30 @@ SESSION_ROOTS = (
     Path("/var/lib/warzone-sentinel/sessions"),
     Path("/opt/warzone-lobby-sentinel/logs/sessions"),
 )
+
+
+@contextmanager
+def _ai_ops_mode(mode: str) -> Iterator[str | None]:
+    """Temporarily set ai_ops.mode without persisting unrelated policy edits."""
+    data = policies.load()
+    ai = dict(data.get("ai_ops") or {})
+    saved = ai.get("mode")
+    ai["mode"] = mode
+    ai["ollama_planner"] = False
+    ai["auto_ids_scan"] = False
+    data["ai_ops"] = ai
+    policies.save(data)
+    try:
+        yield saved
+    finally:
+        data = policies.load()
+        ai = dict(data.get("ai_ops") or {})
+        if saved is None:
+            ai.pop("mode", None)
+        else:
+            ai["mode"] = saved
+        data["ai_ops"] = ai
+        policies.save(data)
 
 
 def _load_peers_from_path(path: Path) -> dict[str, Any]:
@@ -63,27 +88,17 @@ def list_sources(*, limit: int = 40) -> list[dict[str, Any]]:
 
 def replay_payload(payload: dict[str, Any], *, mode: str = "observe") -> dict[str, Any]:
     """Replay a session payload dict through fusion (golden-session CI)."""
-    from . import ai_ops
-
-    saved = (ai_ops._cfg().get("mode"),)
-    try:
-        data = policies.load()
-        data.setdefault("ai_ops", {})["mode"] = mode
-        policies.save(data)
+    with _ai_ops_mode(mode):
         tick = ai_ops.tick(sentinel_payload=payload, source="replay_lab", force=True)
-        plan = tick.get("plan") or {}
-        return {
-            "ok": True,
-            "mode": mode,
-            "verdict": plan.get("verdict"),
-            "execution": tick.get("execution") or {},
-            "plan": plan,
-        }
-    finally:
-        data = policies.load()
-        if saved[0]:
-            data.setdefault("ai_ops", {})["mode"] = saved[0]
-            policies.save(data)
+    plan = tick.get("plan") or {}
+    return {
+        "ok": True,
+        "mode": mode,
+        "verdict": plan.get("verdict"),
+        "execution": tick.get("execution") or {},
+        "plan": plan,
+        "context": tick.get("context") or {},
+    }
 
 
 def replay_path(path: Path, *, mode: str = "observe", restore_mode: str | None = None) -> dict[str, Any]:
@@ -93,24 +108,13 @@ def replay_path(path: Path, *, mode: str = "observe", restore_mode: str | None =
         "phase": peers_doc.get("phase") or "matchmaking",
         "session_hex": peers_doc.get("session_hex"),
     }
-    data = policies.load()
-    ai = dict(data.get("ai_ops") or {})
-    saved_mode = ai.get("mode")
-    if restore_mode is None:
-        restore_mode = str(saved_mode or "assist")
-    ai["mode"] = mode
-    data["ai_ops"] = ai
-    policies.save(data)
-    try:
+    effective_mode = mode
+    with _ai_ops_mode(effective_mode):
         result = ai_ops.tick(sentinel_payload=payload, force=True, source=f"replay:{path.name}")
-    finally:
-        ai["mode"] = restore_mode
-        data["ai_ops"] = ai
-        policies.save(data)
     return {
         "ok": True,
         "path": str(path),
-        "mode": mode,
+        "mode": effective_mode,
         "restored_mode": restore_mode,
         "replay_at": time.time(),
         "tick": result,

@@ -1,0 +1,28 @@
+{
+  "name": "pre_burst_matchmaking",
+  "session_hex": "golden_preburst",
+  "phase": "matchmaking",
+  "expect": {
+    "signals_contain": "pre_burst",
+    "min_shield_actions": 0
+  },
+  "payload": {
+    "phase": "matchmaking",
+    "cheater_label": "POSSIBLE",
+    "session_hex": "golden_preburst",
+    "signals": {"inbound_flood": 0.42, "peer_micro_burst": 0.38},
+    "peer_tracker": {
+      "peers": [
+        {"ip": "45.76.2.1", "identical_count": 12, "vps_probe": false, "packet_size_min": 64, "packet_size_max": 66},
+        {"ip": "45.76.2.2", "identical_count": 11, "vps_probe": false, "packet_size_min": 64, "packet_size_max": 65},
+        {"ip": "45.76.2.3", "identical_count": 10, "vps_probe": false, "packet_size_min": 64, "packet_size_max": 64}
+      ]
+    },
+    "packets": {
+      "metrics": {
+        "tiny_inbound": 120,
+        "inbound_packets": 200
+      }
+    }
+  }
+}

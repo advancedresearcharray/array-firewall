@@ -1,0 +1,25 @@
+{
+  "name": "killcam_player_bind",
+  "session_hex": "golden_killcam",
+  "phase": "in-match",
+  "expect": {
+    "signals_contain": "killcam_bind",
+    "min_killcam_bindings": 1
+  },
+  "payload": {
+    "phase": "in-match",
+    "cheater_label": "POSSIBLE",
+    "session_hex": "golden_killcam",
+    "game_state": {
+      "events": [
+        {"type": "prefire", "player": "ProbeBot42", "offset_ms": 1200}
+      ]
+    },
+    "peer_tracker": {
+      "peers": [
+        {"ip": "8.8.8.8", "identical_count": 2, "role": "clean-peer"},
+        {"ip": "45.77.9.9", "identical_count": 19, "vps_probe": true, "gamertag": "ProbeBot42", "last_seen": 9999999999}
+      ]
+    }
+  }
+}

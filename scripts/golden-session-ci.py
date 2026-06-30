@@ -15,6 +15,15 @@ from lib import replay_lab  # noqa: E402
 FIXTURES = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "golden-sessions"
 
 
+def _signals(replay: dict) -> list[str]:
+    ctx = replay.get("context") or {}
+    return list(ctx.get("signals") or [])
+
+
+def _executed(replay: dict) -> list[dict]:
+    return list(replay.get("execution", {}).get("executed") or [])
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Replay golden sessions — assert shield/block expectations")
     ap.add_argument("--fixture-dir", type=Path, default=FIXTURES)
@@ -24,44 +33,7 @@ def main() -> int:
 
     if args.write_fixtures:
         args.fixture_dir.mkdir(parents=True, exist_ok=True)
-        (args.fixture_dir / "clean_lobby.json").write_text(
-            json.dumps(
-                {
-                    "name": "clean_lobby",
-                    "session_hex": "golden_clean",
-                    "phase": "matchmaking",
-                    "expect": {"max_blocks": 0, "shield_optional": True},
-                    "payload": {"phase": "matchmaking", "cheater_label": "CLEAN", "peer_tracker": {"peers": []}},
-                },
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        (args.fixture_dir / "bad_vps_mesh.json").write_text(
-            json.dumps(
-                {
-                    "name": "bad_vps_mesh",
-                    "session_hex": "golden_bad",
-                    "phase": "in-match",
-                    "expect": {"verdict": "hostile"},
-                    "payload": {
-                        "phase": "in-match",
-                        "cheater_label": "LIKELY",
-                        "peer_tracker": {
-                            "peers": [
-                                {"ip": "45.76.1.1", "identical_count": 24, "vps_probe": True},
-                                {"ip": "45.76.1.2", "identical_count": 22, "vps_probe": True},
-                            ]
-                        },
-                    },
-                },
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        print(f"Wrote fixtures under {args.fixture_dir}")
+        print(f"Fixtures live under {args.fixture_dir}")
         return 0
 
     if not args.fixture_dir.is_dir():
@@ -74,19 +46,31 @@ def main() -> int:
         payload = doc.get("payload") or doc
         replay = replay_lab.replay_payload(payload, mode=args.mode)
         expect = doc.get("expect") or {}
-        executed = replay.get("execution", {}).get("executed") or []
-        blocks = [e for e in executed if e.get("type") in {"block", "restrict", "subnet"}]
+        executed = _executed(replay)
+        blocks = [e for e in executed if e.get("type") in {"block", "restrict", "subnet", "block_peer", "block_subnet"}]
         shields = [e for e in executed if e.get("type") == "shield"]
+        signals = _signals(replay)
         ok = True
         verdict = str(replay.get("verdict") or "")
         if "max_blocks" in expect and len(blocks) > int(expect["max_blocks"]):
             ok = False
         if "min_shield_actions" in expect and len(shields) < int(expect["min_shield_actions"]):
             ok = False
+        if "min_subnet_actions" in expect and len([e for e in blocks if e.get("type") == "block_subnet"]) < int(
+            expect["min_subnet_actions"]
+        ):
+            ok = False
         if "verdict" in expect and verdict.lower() != str(expect["verdict"]).lower():
             ok = False
+        if "signals_contain" in expect:
+            needle = str(expect["signals_contain"])
+            if not any(needle in str(s) for s in signals):
+                ok = False
         status = "PASS" if ok else "FAIL"
-        print(f"{status} {path.name} blocks={len(blocks)} shields={len(shields)} verdict={replay.get('verdict')}")
+        print(
+            f"{status} {path.name} blocks={len(blocks)} shields={len(shields)} "
+            f"verdict={replay.get('verdict')} signals={len(signals)}"
+        )
         if not ok:
             failures += 1
 

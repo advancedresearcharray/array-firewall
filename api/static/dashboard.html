@@ -1095,10 +1095,15 @@
           <div class="stat"><label>Cutover status</label><div class="value" id="goCutoverStatus">—</div></div>
         </div>
         <div class="hint-box" id="goCutoverDetail">—</div>
+        <div class="toolbar" style="margin-bottom:.75rem">
+          <button class="primary sm" id="cutoverExecute">Execute cutover</button>
+          <button class="sm warn" id="cutoverRollback">Rollback</button>
+          <button class="sm" id="cutoverDryRun">Dry run</button>
+          <button class="sm" id="hardeningApply">Apply hardening</button>
+        </div>
         <div class="hint-box">
-          Live cutover (brief outage):<br>
-          <span class="mono">cd /root/deploy/array-firewall && FORCE_CUTOVER=1 ./scripts/cutover-gateway.sh</span><br>
-          Rollback: <span class="mono">./scripts/cutover-rollback.sh</span>
+          API cutover runs in-container (dnsmasq + nft). Proxmox re-IP still via shell when needed:<br>
+          <span class="mono">FORCE_CUTOVER=1 ./scripts/cutover-gateway.sh</span>
         </div>
       </section>
 
@@ -3798,6 +3803,38 @@
     on('cutoverBackup', async () => {
       try { const r = await api('/api/v1/cutover/backup', { method: 'POST', body: '{}' }); showError('Backup: ' + (r.backup || 'ok')); setTimeout(() => showError(''), 4000); }
       catch (e) { showError(e.message); }
+    });
+    on('cutoverDryRun', async () => {
+      try {
+        const r = await api('/api/v1/cutover/dry-run');
+        $('cutoverChecks').innerHTML = (r.planned_steps || []).map(s => `<div>→ <strong>${s.step}</strong> safe=${s.safe}</div>`).join('') || 'Dry run complete.';
+        setText('goCutoverDetail', `Would set gateway ${r.lan_gateway || '?'} · outage ~${r.estimated_outage_sec || '?'}s`);
+      } catch (e) { showError(e.message); }
+    });
+    on('cutoverExecute', async () => {
+      if (!confirm('Execute in-container gateway cutover? Brief LAN outage possible.')) return;
+      try {
+        const r = await api('/api/v1/cutover/execute', { method: 'POST', body: JSON.stringify({ confirm: true }) });
+        if (!r.ok) { showError(r.error || 'Cutover failed'); return; }
+        showError('Cutover executed — renew DHCP'); setTimeout(() => showError(''), 5000);
+        await refresh();
+      } catch (e) { showError(e.message); }
+    });
+    on('cutoverRollback', async () => {
+      if (!confirm('Rollback to lab mode inside container?')) return;
+      try {
+        await api('/api/v1/cutover/rollback', { method: 'POST', body: JSON.stringify({ confirm: true }) });
+        showError('Rollback complete'); setTimeout(() => showError(''), 4000);
+        await refresh();
+      } catch (e) { showError(e.message); }
+    });
+    on('hardeningApply', async () => {
+      if (!confirm('Apply post-cutover hardening bundle?')) return;
+      try {
+        const r = await api('/api/v1/hardening/apply', { method: 'POST', body: JSON.stringify({ stage: 'full' }) });
+        showError(r.ok ? 'Hardening applied' : (r.error || 'Hardening failed'));
+        setTimeout(() => showError(''), 4000);
+      } catch (e) { showError(e.message); }
     });
     on('grpCreate', async () => {
       try {

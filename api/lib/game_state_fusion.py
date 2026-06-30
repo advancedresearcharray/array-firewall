@@ -47,7 +47,18 @@ def fuse(
             )
         player = str(ev.get("player") or "").strip()
         if player and bump and et in cheat_events:
-            bump(player, float(weights.get("game_player_flag", 0.08)), f"game_state:{et}")
+            bound_ip = None
+            bindings = (ctx.get("killcam_bindings") or {}).get("bindings") or []
+            for binding in bindings:
+                if str(binding.get("event_type") or "").lower() == et and (
+                    not player or binding.get("player") == player
+                ):
+                    bound_ip = str(binding.get("bound_ip") or "").strip()
+                    break
+            if bound_ip:
+                bump(bound_ip, float(weights.get("game_player_flag", 0.08)) * 1.5, f"game_state:{et}")
+            else:
+                bump(player, float(weights.get("game_player_flag", 0.08)), f"game_state:{et}")
 
     if summary["flagged_players"] >= 2:
         ctx["signals"].append(f"game_state:flags:{summary['flagged_players']}")
