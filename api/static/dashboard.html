@@ -1301,19 +1301,38 @@
               <option value="enforce">Enforce</option>
             </select>
             <button class="sm" id="aiOpsModeSave">Set mode</button>
+            <button class="sm" id="aiOpsUndo">Undo last tick</button>
             <button class="primary sm" id="aiOpsTick">Tick now</button>
           </div>
         </div>
         <div class="stat-grid" style="margin-bottom:1rem">
           <div class="stat"><label>Mode</label><div class="value" id="aiOpsMode">—</div></div>
+          <div class="stat"><label>Playability</label><div class="value" id="aiOpsPlayScore">—</div></div>
+          <div class="stat"><label>Posture</label><div class="value" id="aiOpsPosture">—</div></div>
           <div class="stat"><label>Fused verdict</label><div class="value" id="aiOpsVerdict">—</div></div>
           <div class="stat"><label>Last tick</label><div class="value mono" id="aiOpsLastTick">—</div></div>
           <div class="stat"><label>Planned</label><div class="value" id="aiOpsPlanned">—</div></div>
           <div class="stat"><label>Executed</label><div class="value" id="aiOpsExecuted">—</div></div>
+          <div class="stat"><label>Learning</label><div class="value mono" id="aiOpsLearning">—</div></div>
+          <div class="stat"><label>Reputation</label><div class="value mono" id="aiOpsReputation">—</div></div>
           <div class="stat"><label>Ollama planner</label><div class="value" id="aiOpsOllama">—</div></div>
           <div class="stat"><label>Tiny-safe</label><div class="value" id="aiOpsTiny">—</div></div>
         </div>
-        <div class="hint-box" id="aiOpsSummary">Autopilot runs every 5s and on each Sentinel mitigate callback.</div>
+        <div class="hint-box" id="aiOpsSummary">Autopilot runs every 5s — stay in lobby; mitigation absorbs cheater probes.</div>
+        <div class="hint-box" id="aiOpsPlayHeadline" style="margin-top:.5rem">Playability advisor loads after first tick.</div>
+        <div class="table-wrap" style="margin-top:1rem">
+          <table>
+            <thead><tr><th>When</th><th>Source</th><th>Action</th><th>Detail</th></tr></thead>
+            <tbody id="aiOpsTimeline">
+              <tr><td colspan="4" class="sub">Timeline empty — run a tick or enter a match.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="section-actions" style="margin-top:1rem">
+          <button class="sm" id="aiOpsFleetExport">Export fleet blocklist</button>
+          <button class="sm" id="aiOpsFleetImport">Import fleet blocklist</button>
+          <span class="sub mono" id="aiOpsFleetStatus">Fleet sync idle</span>
+        </div>
         <div class="table-wrap" style="margin-top:1rem">
           <table>
             <thead><tr><th>IP</th><th>Score</th><th>Reasons</th></tr></thead>
@@ -3037,6 +3056,23 @@
         $('aiOpsMode').innerHTML = `<span class="badge ${modeCls}">${mode}</span>`;
         if ($('aiOpsModeSelect')) $('aiOpsModeSelect').value = mode;
         const st = s.state || {};
+        const play = s.playability || st.last_playability || {};
+        const playScore = play.playability_score;
+        if ($('aiOpsPlayScore')) {
+          const band = play.band || '—';
+          const bandCls = band === 'playable' ? 'ok' : (band === 'strained' ? 'warn' : (band === 'under_attack' ? 'bad' : 'warn'));
+          $('aiOpsPlayScore').innerHTML = playScore != null
+            ? `<span class="badge ${bandCls}">${Number(playScore).toFixed(0)}</span>`
+            : '—';
+        }
+        if ($('aiOpsPosture')) {
+          const posture = play.posture || 'stay_and_mitigate';
+          $('aiOpsPosture').innerHTML = `<span class="badge ok">${posture.replace(/_/g, ' ')}</span>`;
+        }
+        if ($('aiOpsPlayHeadline')) {
+          $('aiOpsPlayHeadline').textContent = play.headline
+            || 'Stay in lobby — autopilot shields probes and blocks repeat offenders.';
+        }
         const verdict = st.last_verdict || '—';
         const vCls = verdict === 'hostile' ? 'bad' : (verdict === 'suspicious' ? 'warn' : 'ok');
         $('aiOpsVerdict').innerHTML = verdict === '—' ? '—' : `<span class="badge ${vCls}">${verdict}</span>`;
@@ -3046,6 +3082,16 @@
         $('aiOpsPlanned').textContent = st.last_planned != null ? String(st.last_planned) : '—';
         const execN = Array.isArray(st.last_executed) ? st.last_executed.length : 0;
         $('aiOpsExecuted').textContent = String(execN);
+        const learn = s.learning || {};
+        if ($('aiOpsLearning')) {
+          $('aiOpsLearning').textContent = learn.outcome_count != null
+            ? `${learn.outcome_count} outcomes · w=${(learn.weights && learn.weights.sentinel_likely != null) ? Number(learn.weights.sentinel_likely).toFixed(2) : '—'}`
+            : '—';
+        }
+        const rep = s.reputation || {};
+        if ($('aiOpsReputation')) {
+          $('aiOpsReputation').textContent = rep.ip_count != null ? `${rep.ip_count} IPs` : '—';
+        }
         $('aiOpsOllama').innerHTML = s.ollama_planner
           ? '<span class="badge ok">on</span>' : '<span class="badge warn">off</span>';
         $('aiOpsTiny').innerHTML = s.tiny_packet_only
@@ -3060,6 +3106,24 @@
               <td class="sub">${(c.reasons || []).slice(0, 3).join(' · ') || '—'}</td>
             </tr>`).join('')
           : '<tr><td colspan="3" class="sub">No fusion candidates yet.</td></tr>';
+
+        const tl = await api('/api/v1/ai-ops/timeline?limit=25');
+        const events = tl.events || [];
+        if ($('aiOpsTimeline')) {
+          $('aiOpsTimeline').innerHTML = events.length
+            ? events.map(e => `<tr>
+                <td class="mono">${(e.ts_iso || '').replace('T', ' ').replace('Z', '')}</td>
+                <td class="sub">${e.source || '—'}</td>
+                <td>${e.action_type || '—'}</td>
+                <td class="sub">${e.detail || ''}${e.session_hex ? ` · ${e.session_hex}` : ''}</td>
+              </tr>`).join('')
+            : '<tr><td colspan="4" class="sub">No autopilot actions logged yet.</td></tr>';
+        }
+        const fleet = await api('/api/v1/ai-ops/fleet');
+        if ($('aiOpsFleetStatus') && fleet.ok !== false) {
+          const when = fleet.last_export ? new Date(fleet.last_export * 1000).toLocaleString() : 'never exported';
+          $('aiOpsFleetStatus').textContent = `Fleet sync ${fleet.enabled ? 'on' : 'off'} · ${when}${fleet.sha256 ? ` · ${fleet.sha256.slice(0, 12)}…` : ''}`;
+        }
       } catch (e) {
         if ($('aiOpsSummary')) $('aiOpsSummary').textContent = 'AI Autopilot unavailable — ' + e.message;
       }
@@ -3428,6 +3492,36 @@
       try {
         const mode = ($('aiOpsModeSelect') || {}).value || 'assist';
         await api('/api/v1/ai-ops/mode', { method: 'POST', body: JSON.stringify({ mode }) });
+        await refreshSecurity();
+      } catch (e) { showError(e.message); }
+    });
+    on('aiOpsUndo', async () => {
+      try {
+        if ($('aiOpsSummary')) $('aiOpsSummary').textContent = 'Rolling back last autopilot tick…';
+        const r = await api('/api/v1/ai-ops/undo', { method: 'POST', body: '{}' });
+        if (r.ok === false) throw new Error(r.error || 'Undo failed');
+        showError('Last autopilot tick undone — playability-safe rollback');
+        setTimeout(() => showError(''), 2500);
+        await refreshSecurity();
+      } catch (e) { showError(e.message); }
+    });
+    on('aiOpsFleetExport', async () => {
+      try {
+        const r = await api('/api/v1/ai-ops/fleet/export', { method: 'POST', body: '{}' });
+        if ($('aiOpsFleetStatus')) {
+          $('aiOpsFleetStatus').textContent = `Exported ${r.peer_count ?? 0} peers · sha256 ${(r.sha256 || '').slice(0, 12)}…`;
+        }
+      } catch (e) { showError(e.message); }
+    });
+    on('aiOpsFleetImport', async () => {
+      try {
+        const raw = prompt('Paste fleet blocklist JSON (array-firewall-fleet-v1):');
+        if (!raw) return;
+        const doc = JSON.parse(raw);
+        const r = await api('/api/v1/ai-ops/fleet/import', { method: 'POST', body: JSON.stringify({ ...doc, merge: true }) });
+        if (r.ok === false) throw new Error(r.error || 'Import failed');
+        showError(`Fleet import: +${r.peers_merged ?? r.peer_added ?? 0} peers · +${r.subnets_merged ?? r.subnet_added ?? 0} subnets`);
+        setTimeout(() => showError(''), 3000);
         await refreshSecurity();
       } catch (e) { showError(e.message); }
     });

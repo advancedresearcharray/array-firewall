@@ -473,6 +473,15 @@ def mitigate(payload: dict[str, Any]) -> dict[str, Any]:
     try:
         from . import ai_ops
 
+        if payload.get("ai_actions"):
+            ai_act = ai_ops.execute_ai_actions(payload)
+            result["ai_actions"] = ai_act
+            if ai_act.get("execution", {}).get("executed"):
+                result["actions"].append(f"ai_actions:{len(ai_act['execution']['executed'])}")
+
+        if payload.get("session_outcome") or payload.get("bad_lobby") is not None:
+            result["outcome_learning"] = ai_ops.record_outcome_from_payload(payload)
+
         ai_tick = ai_ops.tick(sentinel_payload=payload, source="mitigate", force=False)
         result["ai_ops"] = {
             "verdict": (ai_tick.get("plan") or {}).get("verdict"),
@@ -480,6 +489,7 @@ def mitigate(payload: dict[str, Any]) -> dict[str, Any]:
             "executed": len((ai_tick.get("execution") or {}).get("executed") or []),
             "mode": ai_tick.get("mode"),
             "skipped": ai_tick.get("skipped"),
+            "playability": ai_tick.get("playability"),
         }
         if ai_tick.get("execution", {}).get("executed"):
             result["actions"].append(f"ai_ops:{len(ai_tick['execution']['executed'])}")

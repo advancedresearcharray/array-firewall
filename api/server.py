@@ -464,6 +464,36 @@ class Handler(BaseHTTPRequestHandler):
             limit = int((qs.get("limit") or ["20"])[0])
             json_response(self, 200, {"ok": True, "entries": ai_ops.recent_log(limit=limit)})
             return
+        if path == "/api/v1/ai-ops/timeline":
+            _path_only, qs = self._path()
+            limit = int((qs.get("limit") or ["40"])[0])
+            session_hex = (qs.get("session_hex") or [None])[0]
+            from lib import autopilot_audit
+
+            json_response(
+                self,
+                200,
+                {"ok": True, "events": autopilot_audit.recent(limit=limit, session_hex=session_hex)},
+            )
+            return
+        if path == "/api/v1/ai-ops/playability":
+            json_response(self, 200, ai_ops.status().get("playability") or {"ok": True})
+            return
+        if path == "/api/v1/ai-ops/learning":
+            from lib import ai_learning
+
+            json_response(self, 200, ai_learning.status())
+            return
+        if path == "/api/v1/ai-ops/reputation":
+            from lib import reputation_graph
+
+            json_response(self, 200, reputation_graph.status())
+            return
+        if path == "/api/v1/ai-ops/fleet":
+            from lib import fleet_blocklist
+
+            json_response(self, 200, fleet_blocklist.status())
+            return
         if path == "/api/v1/dns/status":
             json_response(self, 200, dns_filter.status())
             return
@@ -661,6 +691,40 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/v1/ai-ops/mode":
             try:
                 json_response(self, 200, ai_ops.set_mode(str(body.get("mode") or "assist")))
+            except Exception as exc:  # noqa: BLE001
+                json_response(self, 500, {"ok": False, "error": str(exc)})
+            return
+
+        if path == "/api/v1/ai-ops/undo":
+            try:
+                from lib import autopilot_audit
+
+                json_response(self, 200, autopilot_audit.undo_last())
+            except Exception as exc:  # noqa: BLE001
+                json_response(self, 500, {"ok": False, "error": str(exc)})
+            return
+
+        if path == "/api/v1/ai-ops/outcome":
+            try:
+                json_response(self, 200, ai_ops.record_outcome_from_payload(body))
+            except Exception as exc:  # noqa: BLE001
+                json_response(self, 500, {"ok": False, "error": str(exc)})
+            return
+
+        if path == "/api/v1/ai-ops/fleet/export":
+            try:
+                from lib import fleet_blocklist
+
+                json_response(self, 200, fleet_blocklist.export_bundle())
+            except Exception as exc:  # noqa: BLE001
+                json_response(self, 500, {"ok": False, "error": str(exc)})
+            return
+
+        if path == "/api/v1/ai-ops/fleet/import":
+            try:
+                from lib import fleet_blocklist
+
+                json_response(self, 200, fleet_blocklist.import_bundle(body, merge=body.get("merge", True)))
             except Exception as exc:  # noqa: BLE001
                 json_response(self, 500, {"ok": False, "error": str(exc)})
             return
