@@ -68,6 +68,21 @@ def ingest_probe_hits(hits: list[dict[str, Any]], *, session_hex: str = "") -> d
     return {"ok": True, **out}
 
 
+def apply_ports(state: dict[str, Any] | None = None, *, apply_nft: bool = True) -> dict[str, Any]:
+    """Push adaptive honeypot ports to nft DNAT + probe-sink listener."""
+    cfg = _cfg()
+    if not cfg.get("enabled", True):
+        return {"ok": True, "skipped": True, "reason": "disabled"}
+    data = dict(state or _load())
+    ports = [int(p) for p in (data.get("active_ports") or []) if p]
+    if not ports:
+        return {"ok": True, "skipped": True, "reason": "no_ports"}
+    sink_port = int(data.get("sink_port") or ports[0])
+    from . import probe_sink
+
+    return probe_sink.reload_ports(ports, sink_port=sink_port, apply_nft=apply_nft)
+
+
 def maybe_rotate(*, force: bool = False) -> dict[str, Any]:
     cfg = _cfg()
     if not cfg.get("enabled", True):
@@ -79,7 +94,11 @@ def maybe_rotate(*, force: bool = False) -> dict[str, Any]:
     if not force and last and (now - last) < interval:
         return {"ok": True, "skipped": True, "active_ports": state.get("active_ports"), "sink_port": state.get("sink_port")}
     hits = [{"port": p} for p in (state.get("port_hits") or {}).keys()]
-    return ingest_probe_hits(hits, session_hex=str(state.get("session_hex") or ""))
+    rotated = ingest_probe_hits(hits, session_hex=str(state.get("session_hex") or ""))
+    if rotated.get("active_ports"):
+        applied = apply_ports(rotated, apply_nft=True)
+        rotated["applied"] = applied
+    return rotated
 
 
 def status() -> dict[str, Any]:

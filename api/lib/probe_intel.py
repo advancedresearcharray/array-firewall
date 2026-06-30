@@ -101,10 +101,87 @@ def session_peers(session_hex: str, *, limit: int = 64) -> list[dict[str, Any]]:
         conn.close()
 
 
+def ip_history(ip: str, *, limit: int = 32) -> list[dict[str, Any]]:
+    ip = str(ip or "").strip().split(":")[0]
+    if not ip:
+        return []
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT session_hex, identical_max, vps_probe, size_spread, first_seen, last_seen, hit_count
+            FROM probe_peers WHERE ip = ? ORDER BY last_seen DESC LIMIT ?
+            """,
+            (ip, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def lookup_ip(ip: str) -> dict[str, Any]:
+    ip = str(ip or "").strip().split(":")[0]
+    if not ip:
+        return {"ok": False, "error": "ip required"}
+    conn = _connect()
+    try:
+        row = conn.execute(
+            """
+            SELECT ip,
+                COUNT(DISTINCT session_hex) AS session_count,
+                MAX(identical_max) AS identical_max,
+                MAX(vps_probe) AS vps_probe,
+                MIN(first_seen) AS first_seen,
+                MAX(last_seen) AS last_seen,
+                SUM(hit_count) AS hit_count
+            FROM probe_peers WHERE ip = ? GROUP BY ip
+            """,
+            (ip,),
+        ).fetchone()
+        if not row:
+            return {"ok": True, "ip": ip, "session_count": 0, "history": []}
+        out = dict(row)
+        out["ok"] = True
+        out["history"] = ip_history(ip, limit=12)
+        return out
+    finally:
+        conn.close()
+
+
+def repeat_offenders(*, min_sessions: int = 2, limit: int = 24) -> list[dict[str, Any]]:
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT ip,
+                COUNT(DISTINCT session_hex) AS session_count,
+                MAX(identical_max) AS identical_max,
+                MAX(vps_probe) AS vps_probe,
+                MAX(last_seen) AS last_seen,
+                SUM(hit_count) AS hit_count
+            FROM probe_peers
+            GROUP BY ip
+            HAVING session_count >= ?
+            ORDER BY session_count DESC, identical_max DESC, last_seen DESC
+            LIMIT ?
+            """,
+            (max(1, int(min_sessions)), limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
 def status() -> dict[str, Any]:
     conn = _connect()
     try:
         n = conn.execute("SELECT COUNT(*) AS c FROM probe_peers").fetchone()
-        return {"ok": True, "row_count": int(n["c"]) if n else 0}
+        offenders = repeat_offenders(min_sessions=2, limit=8)
+        return {
+            "ok": True,
+            "row_count": int(n["c"]) if n else 0,
+            "repeat_offenders": offenders,
+            "repeat_offender_count": len(offenders),
+        }
     finally:
         conn.close()

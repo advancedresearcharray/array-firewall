@@ -253,6 +253,12 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/v1/gaming/probe-intel":
             json_response(self, 200, gaming.probe_intel_status())
             return
+        if path.startswith("/api/v1/gaming/probe-intel/ip/"):
+            from lib import probe_intel
+
+            ip = path.removeprefix("/api/v1/gaming/probe-intel/ip/").strip("/")
+            json_response(self, 200, probe_intel.lookup_ip(ip))
+            return
         if path == "/api/v1/gaming/peer-rate-limits":
             json_response(self, 200, gaming.peer_rate_limits_status())
             return

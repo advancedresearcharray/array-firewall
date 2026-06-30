@@ -431,7 +431,7 @@ def mitigate(payload: dict[str, Any]) -> dict[str, Any]:
                 result["gpu_flow"] = gf
                 if not gf.get("skipped"):
                     gpu_strict, gpu_throttle = gpu_flow.shield_peer_hints(gf)
-                    shield_peers = list(dict.fromkeys([*shield_peers, *gpu_strict]))
+                    shield_peers = list(dict.fromkeys([*shield_peers, *gpu_strict, *gpu_throttle]))
                     if gpu_strict:
                         result["actions"].append(f"gpu_flow_strict:{len(gpu_strict)}")
                     if gpu_throttle:
@@ -520,6 +520,10 @@ def mitigate(payload: dict[str, Any]) -> dict[str, Any]:
             result["adaptive_honeypot"] = ah
             if ah.get("active_ports"):
                 result["actions"].append(f"honeypot_ports:{len(ah['active_ports'])}")
+                applied = adaptive_honeypot.apply_ports(ah, apply_nft=True)
+                result["adaptive_honeypot"]["applied"] = applied
+                if applied.get("ok"):
+                    result["actions"].append("honeypot:apply")
         except Exception as exc:
             result["adaptive_honeypot"] = {"ok": False, "error": str(exc)}
 
@@ -534,6 +538,32 @@ def mitigate(payload: dict[str, Any]) -> dict[str, Any]:
                 result["actions"].append(f"gaming_probe_ids:{gp['blocked']}")
         except Exception as exc:
             result["gaming_probe_ids"] = {"ok": False, "error": str(exc)}
+
+    mit_cfg = policies.gaming().get("mitigation") or {}
+    if peer_rows and mit_cfg.get("mesh_subnet_block_enabled", True) and phase in {"matchmaking", "in-match"}:
+        try:
+            from . import mesh_reputation, subnet_blocklist
+
+            mesh = mesh_reputation.analyze_peers(peer_rows, session_hex=session_hex or "")
+            result["mesh_reputation"] = {
+                "clique_count": mesh.get("clique_count"),
+                "cliques": (mesh.get("cliques") or [])[:6],
+            }
+            for clique in mesh_reputation.cliques_for_subnet_block(mesh):
+                ips = [ip for ip in (clique.get("ips") or []) if not peer_blocklist.in_game_allowlist(ip)]
+                if len(ips) < 2:
+                    continue
+                subnet_result = subnet_blocklist.block_from_ips(
+                    ips,
+                    reason="mesh_clique",
+                    source="sentinel_mitigate",
+                )
+                result.setdefault("mesh_subnet_blocklist", []).append(subnet_result)
+                result["actions"].append(
+                    f"mesh_subnet:{subnet_result.get('nft_applied', 0)}"
+                )
+        except Exception as exc:
+            result["mesh_subnet_blocklist"] = {"ok": False, "error": str(exc)}
 
     if phase == "in-match":
         metrics = {}

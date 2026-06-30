@@ -302,6 +302,8 @@
       "peer_rate_limits_enabled": true,
       "gpu_flow_enabled": true,
       "gpu_flow_min_peers": 2,
+      "probe_intel_enabled": true,
+      "mesh_subnet_block_enabled": true,
       "download_desync_enabled": true,
       "download_desync_jitter_min": 0.35,
       "gaming_probe_ids": {

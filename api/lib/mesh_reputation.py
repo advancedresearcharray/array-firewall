@@ -78,6 +78,15 @@ def analyze_peers(peers: list[dict[str, Any]], *, session_hex: str = "") -> dict
     return result
 
 
+def cliques_for_subnet_block(mesh: dict[str, Any]) -> list[dict[str, Any]]:
+    """Cliques eligible for automatic /24 subnet blocks."""
+    out: list[dict[str, Any]] = []
+    for clique in mesh.get("cliques") or []:
+        if int(clique.get("member_count") or 0) >= 2 and int(clique.get("vps_count") or 0) >= 1:
+            out.append(clique)
+    return out
+
+
 def mesh_score(ip: str) -> float:
     if not MESH_FILE.is_file():
         return 0.0

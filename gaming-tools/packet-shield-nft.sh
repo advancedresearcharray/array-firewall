@@ -12,6 +12,44 @@ PER_SRC_UDP_RATE="${PER_SRC_UDP_RATE:-500}"
 CONN_CAP_PER_PEER="${CONN_CAP_PER_PEER:-40}"
 PROBE_SINK_PORT="${PROBE_SINK_PORT:-39217}"
 HONEYPOT_TCP="{ 23, 21, 445, 135, 139, 3389, 5900, 8080, 8443, 31337, 4444, 5555, 6667 }"
+PEER_UDP_RATE="${PEER_UDP_RATE:-15}"
+PEER_UDP_BURST="${PEER_UDP_BURST:-30}"
+
+load_adaptive_honeypot_ports() {
+  local f="/var/lib/array-firewall/adaptive-honeypot.json"
+  [[ -f "$f" ]] || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+  eval "$(python3 - "$f" <<'PY'
+import json, sys
+from pathlib import Path
+d = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+ports = [int(p) for p in (d.get("active_ports") or []) if p]
+sink = int(d.get("sink_port") or (ports[0] if ports else 39217))
+if ports:
+    print(f"export HONEYPOT_TCP='{{ {', '.join(str(p) for p in ports[:16])} }}'")
+print(f"export PROBE_SINK_PORT={sink}")
+PY
+)"
+}
+
+load_peer_rate_limits() {
+  local f="/var/lib/array-firewall/peer-rate-overrides.json"
+  [[ -f "$f" ]] || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+  eval "$(python3 - "$f" <<'PY'
+import json, sys
+from pathlib import Path
+d = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+peers = d.get("peers") or {}
+rates = [int(e.get("per_src_udp_rate")) for e in peers.values() if e.get("per_src_udp_rate")]
+if rates:
+    rate = max(8, min(rates))
+    burst = max(12, rate // 2)
+    print(f"export PEER_UDP_RATE={rate}")
+    print(f"export PEER_UDP_BURST={burst}")
+PY
+)"
+}
 
 # shellcheck disable=SC1090
 source "$CONF"
@@ -92,6 +130,14 @@ cmd_relax() {
   relax_honeypot_nat
   rm -f "$STATE" "/var/lib/array-firewall/suspicious-peers.txt"
   log "RELAX — gaming nft table removed (persistent peer list retained)"
+}
+
+cmd_refresh_honeypot() {
+  need_root
+  require_xbox
+  load_adaptive_honeypot_ports
+  setup_honeypot_nat
+  log "honeypot refresh — sink :${PROBE_SINK_PORT} ports=${HONEYPOT_TCP}"
 }
 
 write_peer_list() {
@@ -214,6 +260,8 @@ PY
 cmd_shield() {
   need_root
   require_xbox
+  load_adaptive_honeypot_ports
+  load_peer_rate_limits
   ensure_wan_nat_py
   local level="${1:-normal}"
   shift || true
@@ -425,7 +473,7 @@ PY
     nft add rule "$TABLE" xbox_in ip saddr @suspicious_peers ip protocol udp \
       udp length 0-"$TINY_MAX" counter drop comment '"peer tiny probe"'
     nft add rule "$TABLE" xbox_in ip saddr @suspicious_peers ip protocol udp \
-      limit rate 15/second burst 30 packets accept
+      limit rate "${PEER_UDP_RATE}/second" burst "${PEER_UDP_BURST} packets" accept
     nft add rule "$TABLE" xbox_in ip saddr @suspicious_peers ip protocol udp \
       counter drop comment '"peer flood cap"'
     nft add rule "$TABLE" xbox_in ip saddr @suspicious_peers ip protocol tcp tcp flags syn \
@@ -532,6 +580,7 @@ case "${1:-status}" in
   strict) cmd_shield strict ;;
   peer-strict) cmd_shield peer-strict ;;
   matchmaking) cmd_shield matchmaking ;;
+  refresh-honeypot) cmd_refresh_honeypot ;;
   relax|off) cmd_relax ;;
-  *) echo "Usage: $0 {status|shield [normal|strict|whitelist|peer-strict|matchmaking|console [peer-ip...]]|console|strict|peer-strict|matchmaking|relax}"; exit 2 ;;
+  *) echo "Usage: $0 {status|shield [normal|strict|whitelist|peer-strict|matchmaking|console [peer-ip...]]|console|strict|peer-strict|matchmaking|refresh-honeypot|relax}"; exit 2 ;;
 esac

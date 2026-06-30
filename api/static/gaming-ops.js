@@ -390,6 +390,63 @@
     }
   }
 
+  async function submitLobbyOutcome(verdict) {
+    try {
+      const cockpit = await api('/api/v1/gaming/match-cockpit');
+      const hex = cockpit.session_hex || (cockpit.sentinel || {}).session_hex || null;
+      const label = (cockpit.sentinel || {}).cheater_label || null;
+      const r = await api('/api/v1/ai-ops/outcome', {
+        method: 'POST',
+        body: JSON.stringify({
+          verdict,
+          bad_lobby: verdict === 'bad' || verdict === 'kicked',
+          session_hex: hex,
+          cheater_label: label,
+          note: 'match_cockpit_manual',
+        }),
+      });
+      const msg = $('goCkOutcomeMsg');
+      if (msg) {
+        msg.textContent = r.adjusted
+          ? `Recorded — tuned ${(r.touched || []).join(', ') || 'weights'}`
+          : 'Recorded';
+      }
+      toast(`Outcome: ${verdict}`);
+    } catch (e) {
+      showError(e.message);
+    }
+  }
+
+  async function refreshProbeIntel() {
+    if (!$('goProbeIntelRows')) return;
+    try {
+      const [pi, ah, ps] = await Promise.all([
+        api('/api/v1/gaming/probe-intel'),
+        api('/api/v1/gaming/adaptive-honeypot').catch(() => ({})),
+        api('/api/v1/gaming/probe-sink').catch(() => ({})),
+      ]);
+      setText('goProbeIntelRows', pi.row_count != null ? String(pi.row_count) : '—');
+      setText('goProbeIntelRepeat', pi.repeat_offender_count != null ? String(pi.repeat_offender_count) : '0');
+      const ports = (ah.state || {}).active_ports || ps.honeypot_ports || [];
+      setText('goHoneypotPorts', ports.length ? ports.slice(0, 8).join(', ') : '—');
+      const rows = pi.repeat_offenders || [];
+      const body = $('goProbeIntelBody');
+      if (!body) return;
+      if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="4" class="sub">No repeat offenders yet</td></tr>';
+      } else {
+        body.innerHTML = rows.map(row => `<tr>
+          <td class="mono">${esc(row.ip || '—')}</td>
+          <td>${esc(String(row.session_count ?? '—'))}</td>
+          <td>${esc(String(row.identical_max ?? '—'))}</td>
+          <td>${row.vps_probe ? badge('warn', 'vps') : '—'}</td>
+        </tr>`).join('');
+      }
+    } catch (e) {
+      setText('goProbeIntelRows', e.message);
+    }
+  }
+
   async function refreshMatchCockpit() {
     if (!$('goCkPhase')) return;
     try {
@@ -439,6 +496,7 @@
       refreshAllowlistLearn(),
       refreshPatternEncode(),
       refreshQce(),
+      refreshProbeIntel(),
       refreshMatchCockpit(),
     ]);
   }
@@ -745,6 +803,10 @@
 
     on('goTimelineRefresh', () => refreshTimeline());
     on('goCockpitRefresh', () => refreshMatchCockpit());
+    on('goCkOutcomeClean', () => submitLobbyOutcome('clean'));
+    on('goCkOutcomeBad', () => submitLobbyOutcome('bad'));
+    on('goCkOutcomeKicked', () => submitLobbyOutcome('kicked'));
+    on('goProbeIntelRefresh', () => refreshProbeIntel());
     on('goRouteApply', async () => {
       try {
         const gw = ($('goRouteGwIn') || {}).value?.trim();

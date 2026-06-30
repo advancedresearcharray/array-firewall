@@ -267,16 +267,19 @@ def match_cockpit() -> dict[str, Any]:
             "pre_burst_forecast": st.get("pre_burst_forecast"),
             "game_fusion": st.get("game_fusion"),
             "mesh_reputation": st.get("mesh_reputation"),
+            "gpu_flow": st.get("gpu_flow"),
+            "learning": st.get("learning"),
         }
     except Exception as exc:
         out["ai_ops"] = {"ok": False, "error": str(exc)}
     try:
-        from . import peer_rate_limits, mesh_reputation, adaptive_honeypot, gpu_flow
+        from . import peer_rate_limits, mesh_reputation, adaptive_honeypot, gpu_flow, probe_intel
 
         out["peer_rate_limits"] = peer_rate_limits.status().get("analysis")
         out["mesh_reputation"] = mesh_reputation.status()
         out["adaptive_honeypot"] = adaptive_honeypot.status().get("state")
         out["gpu_flow"] = gpu_flow.status()
+        out["probe_intel"] = probe_intel.status()
     except Exception:
         pass
     return out

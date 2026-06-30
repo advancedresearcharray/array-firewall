@@ -53,6 +53,7 @@ def _cfg() -> dict[str, Any]:
             "ids_ai_high": 0.30,
             "repeat_offender": 0.20,
             "gpu_flood": 0.20,
+            "gpu_flow_strict": 0.22,
             "reputation_bad": 0.35,
             "pre_burst": 0.30,
             "game_kick": 0.35,
@@ -384,6 +385,44 @@ def _fuse_context(*, sentinel_payload: dict[str, Any] | None = None) -> dict[str
         ctx["mesh_reputation"] = mesh
         if mesh.get("clique_count", 0) >= 1:
             ctx["signals"].append(f"mesh_cliques:{mesh.get('clique_count')}")
+        for clique in mesh_reputation.cliques_for_subnet_block(mesh):
+            for ip in (clique.get("ips") or [])[:4]:
+                bump(
+                    ip,
+                    float(weights.get("mesh_cluster", 0.28)),
+                    f"mesh_clique:{clique.get('member_count')}",
+                )
+
+    if cfg.get("probe_intel_enabled", True):
+        try:
+            from . import probe_intel
+
+            for row in probe_intel.repeat_offenders(min_sessions=2, limit=10):
+                ip = str(row.get("ip") or "").strip()
+                sess = int(row.get("session_count") or 0)
+                if not ip or sess < 2:
+                    continue
+                bump(
+                    ip,
+                    float(weights.get("repeat_offender", 0.20)) * min(sess, 5) / 2,
+                    f"probe_intel:{sess}sessions",
+                    session_count=sess,
+                )
+                if sess >= 3:
+                    ctx["signals"].append(f"probe_intel_repeat:{ip}")
+            for peer in peer_rows_mesh:
+                ip = str(peer.get("ip") or "").split(":")[0].strip()
+                if not ip:
+                    continue
+                hist = probe_intel.lookup_ip(ip)
+                if int(hist.get("session_count") or 0) >= 2:
+                    bump(
+                        ip,
+                        float(weights.get("vps_probe", 0.40)) * 0.35,
+                        f"probe_intel_hist:{hist.get('session_count')}",
+                    )
+        except Exception:
+            pass
 
     ctx["candidates"] = dict(
         sorted(scores.items(), key=lambda kv: kv[1]["score"], reverse=True)[:32]
@@ -433,6 +472,10 @@ def _heuristic_plan(context: dict[str, Any]) -> dict[str, Any]:
     vps_blocks = [ip for ip in block_ips if (context.get("candidates") or {}).get(ip, {}).get("vps_probe")]
     if len(vps_blocks) >= 2:
         subnet_ips.extend(vps_blocks[:6])
+
+    mesh = context.get("mesh_reputation") or {}
+    for clique in mesh_reputation.cliques_for_subnet_block(mesh):
+        subnet_ips.extend((clique.get("ips") or [])[:4])
 
     if gaming and verdict in {"suspicious", "hostile"}:
         top_score = float(next(iter((context.get("candidates") or {}).values()), {}).get("score") or 0)

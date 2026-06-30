@@ -16,6 +16,7 @@ except ImportError:
 
 EVENT_LOG = Path("/var/lib/array-firewall/probe-sink.jsonl")
 COUNTER_STATE = Path("/var/lib/array-firewall/probe-sink-counters.json")
+SINK_ENV = Path("/var/lib/array-firewall/probe-sink.env")
 HONEYPOT_PORTS = (23, 21, 445, 135, 139, 3389, 5900, 8080, 8443, 31337, 4444, 5555, 6667)
 
 
@@ -200,8 +201,73 @@ def ingest_listener_log(*, limit: int = 200) -> dict[str, Any]:
     return {"ok": True, "ingested": ingested}
 
 
+def _active_honeypot_ports() -> tuple[list[int], int]:
+    """Prefer adaptive honeypot state over static defaults."""
+    try:
+        from . import adaptive_honeypot
+
+        state = adaptive_honeypot.status().get("state") or {}
+        ports = [int(p) for p in (state.get("active_ports") or []) if p]
+        if ports:
+            return ports, int(state.get("sink_port") or ports[0])
+    except Exception:
+        pass
+    cfg = _cfg()
+    return list(HONEYPOT_PORTS), int(cfg.get("sink_port") or 39217)
+
+
+def reload_ports(
+    active_ports: list[int],
+    *,
+    sink_port: int,
+    apply_nft: bool = True,
+) -> dict[str, Any]:
+    """Reload honeypot DNAT + TCP sink listener with adaptive port set."""
+    ports = [int(p) for p in active_ports if p]
+    if not ports:
+        return {"ok": False, "error": "no ports"}
+    sink_port = int(sink_port or ports[0])
+    SINK_ENV.parent.mkdir(parents=True, exist_ok=True)
+    SINK_ENV.write_text(f"PROBE_SINK_PORT={sink_port}\n", encoding="utf-8")
+    nft_result: dict[str, Any] = {"ok": True, "skipped": True}
+    if apply_nft:
+        script = Path("/opt/array-firewall/gaming-tools/packet-shield-nft.sh")
+        if script.is_file():
+            proc = subprocess.run(
+                [str(script), "refresh-honeypot"],
+                capture_output=True,
+                text=True,
+                timeout=45,
+            )
+            nft_result = {
+                "ok": proc.returncode == 0,
+                "exit": proc.returncode,
+                "stdout": (proc.stdout or "").strip()[-400:],
+                "stderr": (proc.stderr or "").strip()[-400:],
+            }
+    listener = {"ok": True, "skipped": True}
+    try:
+        proc = subprocess.run(
+            ["systemctl", "restart", "array-firewall-probe-sink"],
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        listener = {"ok": proc.returncode == 0, "exit": proc.returncode}
+    except OSError as exc:
+        listener = {"ok": False, "error": str(exc)}
+    return {
+        "ok": bool(nft_result.get("ok")) and bool(listener.get("ok")),
+        "active_ports": ports,
+        "sink_port": sink_port,
+        "nft": nft_result,
+        "listener": listener,
+    }
+
+
 def status() -> dict[str, Any]:
     cfg = _cfg()
+    ports, sink = _active_honeypot_ports()
     listener_active = subprocess.run(
         ["systemctl", "is-active", "array-firewall-probe-sink"],
         capture_output=True,
@@ -211,8 +277,9 @@ def status() -> dict[str, Any]:
     return {
         "ok": True,
         "enabled": bool(cfg.get("honeypot_enabled", True)),
-        "sink_port": cfg.get("sink_port", 39217),
-        "honeypot_ports": list(HONEYPOT_PORTS),
+        "sink_port": sink,
+        "honeypot_ports": ports,
+        "adaptive": ports != list(HONEYPOT_PORTS),
         "listener_active": listener_active,
         "recent_events": recent_events(limit=20),
         "event_count": len(EVENT_LOG.read_text(encoding="utf-8").splitlines()) if EVENT_LOG.is_file() else 0,

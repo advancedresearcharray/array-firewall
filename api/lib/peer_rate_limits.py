@@ -98,9 +98,15 @@ def apply_to_shield(peers: list[dict[str, Any]], *, phase: str = "", sync_nft: b
 
 def status() -> dict[str, Any]:
     analysis = {}
+    overrides = {}
     if ANALYSIS_FILE.is_file():
         try:
             analysis = json.loads(ANALYSIS_FILE.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             analysis = {}
-    return {"ok": True, "analysis": analysis}
+    if OVERRIDE_FILE.is_file():
+        try:
+            overrides = json.loads(OVERRIDE_FILE.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            overrides = {}
+    return {"ok": True, "analysis": analysis, "overrides": overrides}

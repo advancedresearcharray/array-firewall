@@ -5,6 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+EnvironmentFile=-/var/lib/array-firewall/probe-sink.env
 Environment=PROBE_SINK_BIND=0.0.0.0
 Environment=PROBE_SINK_PORT=39217
 Environment=PROBE_SINK_LOG=/var/lib/array-firewall/probe-sink-listener.jsonl

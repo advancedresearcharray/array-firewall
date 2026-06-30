@@ -1867,6 +1867,20 @@
           </div>
           <textarea class="policy-textarea" id="goQceOut" placeholder="QCE measurement…" style="margin-top:.65rem;min-height:100px"></textarea>
         </section>
+        <section class="section panel">
+          <div class="section-head"><div><h2>Probe intel graph</h2><p>Cross-session VPS / identical-peer offenders (feeds autopilot).</p></div>
+            <div class="section-actions"><button class="sm" id="goProbeIntelRefresh">Refresh</button></div>
+          </div>
+          <div class="stat-grid">
+            <div class="stat"><label>Indexed rows</label><div class="value mono" id="goProbeIntelRows">—</div></div>
+            <div class="stat"><label>Repeat offenders</label><div class="value" id="goProbeIntelRepeat">—</div></div>
+            <div class="stat"><label>Honeypot ports</label><div class="value mono" id="goHoneypotPorts">—</div></div>
+          </div>
+          <div class="table-wrap" style="margin-top:.65rem">
+            <table><thead><tr><th>IP</th><th>Sessions</th><th>Identical max</th><th>VPS</th></tr></thead>
+            <tbody id="goProbeIntelBody"><tr><td colspan="4" class="sub">No repeat offenders yet</td></tr></tbody></table>
+          </div>
+        </section>
       </div>
 
       <div class="subpanel" id="go-panel-cockpit">
@@ -1885,6 +1899,13 @@
             <div class="stat"><label>Mesh cliques</label><div class="value" id="goCkMesh">—</div></div>
           </div>
           <p class="sub" id="goCkHeadline" style="margin:.75rem 0">—</p>
+          <div class="toolbar" style="margin-bottom:.65rem">
+            <span class="sub">Lobby outcome (tunes fusion weights — stay in lobby):</span>
+            <button class="sm" type="button" id="goCkOutcomeClean">Clean lobby</button>
+            <button class="sm warn" type="button" id="goCkOutcomeBad">Bad lobby</button>
+            <button class="sm warn" type="button" id="goCkOutcomeKicked">Kicked</button>
+            <span class="sub mono" id="goCkOutcomeMsg"></span>
+          </div>
           <div class="table-wrap">
             <table><thead><tr><th>IP</th><th>Identical</th><th>VPS</th><th>Role</th></tr></thead>
             <tbody id="goCkPeers"><tr><td colspan="4" class="sub">No active peers</td></tr></tbody></table>
