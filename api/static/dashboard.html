@@ -1773,14 +1773,14 @@
       <div class="subpanel" id="go-panel-innovation">
         <div class="two-col">
           <section class="section panel">
-            <div class="section-head"><div><h2>Match timeline</h2><p>Shield, buffer, upload, peers, and connection milestones per session.</p></div></div>
+            <div class="section-head"><div><h2>Causal match timeline</h2><p>Probe → shield → block waterfall with causal links (stay in lobby).</p></div></div>
             <div class="form-row">
               <label>Session <select id="goTimelineSession"><option value="">Select session…</option></select></label>
               <button class="sm" id="goTimelineRefresh">Load timeline</button>
             </div>
             <div class="table-wrap" style="margin-top:.65rem">
-              <table><thead><tr><th>Time</th><th>Kind</th><th>Detail</th><th>Phase</th></tr></thead>
-              <tbody id="goTimelineBody"><tr><td colspan="4" class="sub">Pick a session and load timeline</td></tr></tbody></table>
+              <table><thead><tr><th>Time</th><th>Kind</th><th>Detail</th><th>Causal</th><th>Phase</th></tr></thead>
+              <tbody id="goTimelineBody"><tr><td colspan="5" class="sub">Pick a session and load timeline</td></tr></tbody></table>
             </div>
           </section>
           <section class="section panel">

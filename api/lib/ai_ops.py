@@ -17,7 +17,7 @@ from typing import Any
 
 from . import ids, peer_blocklist, policies, sentinel
 from . import ai_learning, autopilot_audit, negative_allowlist, playability, reputation_graph
-from . import adaptive_posture, pre_burst_forecast
+from . import adaptive_posture, pre_burst_forecast, game_state_fusion
 
 STATE_FILE = Path("/var/lib/array-firewall/ai-ops.json")
 LOG_FILE = Path("/var/lib/array-firewall/ai-ops-log.jsonl")
@@ -55,6 +55,9 @@ def _cfg() -> dict[str, Any]:
             "gpu_flood": 0.20,
             "reputation_bad": 0.35,
             "pre_burst": 0.30,
+            "game_kick": 0.35,
+            "game_cheat_event": 0.12,
+            "game_player_flag": 0.08,
         },
         "pre_burst_identical_min": 6,
         "pre_burst_identical_max": 19,
@@ -176,6 +179,7 @@ def _fuse_context(*, sentinel_payload: dict[str, Any] | None = None) -> dict[str
     except Exception:
         dash = {}
     payload = dict(sentinel_payload or dash)
+    ctx["_payload"] = payload
     pt = payload.get("peer_tracker") or {}
     ctx["phase"] = str(payload.get("phase") or pt.get("phase") or "")
     ctx["session_hex"] = str(payload.get("session_hex") or pt.get("session_hex") or "")
@@ -350,10 +354,13 @@ def _fuse_context(*, sentinel_payload: dict[str, Any] | None = None) -> dict[str
     except Exception:
         pass
 
+    if cfg.get("game_state_fusion_enabled", True):
+        game_state_fusion.fuse(ctx, payload, bump=bump, weights=weights)
+
     ctx["candidates"] = dict(
         sorted(scores.items(), key=lambda kv: kv[1]["score"], reverse=True)[:32]
     )
-    if cfg.get("pre_burst_enabled", True) and ctx.get("phase") == "matchmaking":
+    if cfg.get("pre_burst_enabled", True) and ctx.get("phase") in {"matchmaking", "in-match"}:
         ctx["pre_burst_forecast"] = pre_burst_forecast.forecast(ctx)
         pbf = ctx["pre_burst_forecast"]
         if pbf.get("recommend_shield"):
@@ -896,6 +903,11 @@ def tick(
     state["last_playability"] = play
     state["last_adaptive_posture"] = context.get("adaptive_posture")
     state["last_pre_burst_forecast"] = context.get("pre_burst_forecast")
+    state["last_game_fusion"] = {
+        "score": context.get("game_fusion_score"),
+        "verdict": context.get("fused_game_verdict"),
+        "game_state": context.get("game_state"),
+    }
     state["last_tick_id"] = tick_id
 
     fleet_result = None
@@ -1065,6 +1077,7 @@ def status() -> dict[str, Any]:
         "playability": state.get("last_playability"),
         "adaptive_posture": state.get("last_adaptive_posture"),
         "pre_burst_forecast": state.get("last_pre_burst_forecast"),
+        "game_fusion": state.get("last_game_fusion"),
         "learning": ai_learning.status(),
         "reputation": reputation_graph.status(),
         "timeline": autopilot_audit.status(),

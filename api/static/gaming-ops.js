@@ -327,25 +327,26 @@
     await loadTimelineSessions();
     const hex = ($('goTimelineSession') || {}).value;
     if (!hex) {
-      $('goTimelineBody').innerHTML = '<tr><td colspan="4" class="sub">Select a session</td></tr>';
+      $('goTimelineBody').innerHTML = '<tr><td colspan="5" class="sub">Select a session</td></tr>';
       return;
     }
     try {
-      const r = await api(`/api/v1/gaming/sessions/${encodeURIComponent(hex)}/timeline?limit=120`);
+      const r = await api(`/api/v1/gaming/sessions/${encodeURIComponent(hex)}/causal-timeline?limit=120`);
       const events = r.events || [];
       const body = $('goTimelineBody');
       if (!events.length) {
-        body.innerHTML = '<tr><td colspan="4" class="sub">No timeline events for this session</td></tr>';
+        body.innerHTML = '<tr><td colspan="5" class="sub">No timeline events for this session</td></tr>';
         return;
       }
       body.innerHTML = events.map(ev => `<tr>
         <td class="mono">${esc((ev.ts_iso || '').toString().slice(11, 19) || '—')}</td>
         <td>${esc(ev.kind || '—')}</td>
         <td>${esc(ev.detail || '—')}</td>
+        <td class="sub">${esc(ev.causal_label || '—')}</td>
         <td>${esc(ev.phase || '—')}</td>
       </tr>`).join('');
     } catch (e) {
-      setHtml('goTimelineBody', `<tr><td colspan="4" class="sub">${esc(e.message)}</td></tr>`);
+      setHtml('goTimelineBody', `<tr><td colspan="5" class="sub">${esc(e.message)}</td></tr>`);
     }
   }
 

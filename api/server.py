@@ -250,6 +250,12 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/v1/gaming/probe-sink":
             json_response(self, 200, probe_sink.status())
             return
+        if path == "/api/v1/gaming/probe-intel":
+            json_response(self, 200, gaming.probe_intel_status())
+            return
+        if path == "/api/v1/gaming/peer-rate-limits":
+            json_response(self, 200, gaming.peer_rate_limits_status())
+            return
         if path == "/api/v1/afld/status":
             json_response(self, 200, afld.status())
             return
@@ -334,6 +340,12 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/v1/qos/buffer":
             json_response(self, 200, qos.buffer_tune_status())
+            return
+        if path.startswith("/api/v1/gaming/sessions/") and path.endswith("/causal-timeline"):
+            session_hex = path.removeprefix("/api/v1/gaming/sessions/").removesuffix("/causal-timeline").strip("/")
+            _path_only, qs = self._path()
+            limit = int((qs.get("limit") or ["150"])[0])
+            json_response(self, 200, gaming.causal_timeline(session_hex, limit=limit))
             return
         if path.startswith("/api/v1/gaming/sessions/") and path.endswith("/timeline"):
             session_hex = path.removeprefix("/api/v1/gaming/sessions/").removesuffix("/timeline").strip("/")

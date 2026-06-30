@@ -221,6 +221,24 @@ def session_timeline(session_hex: str, *, limit: int = 150) -> dict[str, Any]:
     return timeline_mod.build(session_hex, limit=limit)
 
 
+def causal_timeline(session_hex: str, *, limit: int = 150) -> dict[str, Any]:
+    from . import causal_timeline as causal_mod
+
+    return causal_mod.build(session_hex, limit=limit)
+
+
+def peer_rate_limits_status() -> dict[str, Any]:
+    from . import peer_rate_limits
+
+    return peer_rate_limits.status()
+
+
+def probe_intel_status() -> dict[str, Any]:
+    from . import probe_intel
+
+    return probe_intel.status()
+
+
 def allowlist_learn_status() -> dict[str, Any]:
     from . import allowlist_learn
 
@@ -271,6 +289,7 @@ _DEFAULT_MITIGATION: dict[str, Any] = {
     "probe_block_ttl_sec": 86400,
     "tcp_rst_non_game": True,
     "auto_route_pref_in_match": True,
+    "peer_rate_limits_enabled": True,
 }
 
 _DEFAULT_UPLOAD_ASSIST: dict[str, Any] = {

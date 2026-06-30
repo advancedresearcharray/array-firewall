@@ -298,7 +298,8 @@
       },
       "probe_block_ttl_sec": 86400,
       "tcp_rst_non_game": true,
-      "auto_route_pref_in_match": true
+      "auto_route_pref_in_match": true,
+      "peer_rate_limits_enabled": true
     },
     "afld": {
       "enabled": true,
@@ -413,6 +414,7 @@
     "rqd_investigate_on_peak": true,
     "gpu_fusion_enabled": true,
     "replay_lab_enabled": true,
+    "game_state_fusion_enabled": true,
     "fuse_weights": {
       "sentinel_likely": 0.35,
       "vps_probe": 0.40,
@@ -420,7 +422,10 @@
       "asvi_act": 0.30,
       "qce_peak": 0.25,
       "ids_ai_high": 0.30,
-      "repeat_offender": 0.20
+      "repeat_offender": 0.20,
+      "game_kick": 0.35,
+      "game_cheat_event": 0.12,
+      "game_player_flag": 0.08
     }
   },
   "custom_hooks": []

@@ -42,15 +42,19 @@ def record_probe(
     proto: str = "tcp",
     reason: str = "honeypot",
     meta: dict[str, Any] | None = None,
+    session_hex: str | None = None,
 ) -> dict[str, Any]:
     EVENT_LOG.parent.mkdir(parents=True, exist_ok=True)
+    meta = dict(meta or {})
+    if session_hex:
+        meta["session_hex"] = str(session_hex).strip()
     row = {
         "ts": _now(),
         "ip": ip.strip(),
         "port": port,
         "proto": proto,
         "reason": reason,
-        "meta": meta or {},
+        "meta": meta,
     }
     with EVENT_LOG.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(row) + "\n")
@@ -215,23 +219,58 @@ def status() -> dict[str, Any]:
     }
 
 
+def tag_session_on_recent_probes(session_hex: str, *, window_sec: float = 300.0) -> dict[str, Any]:
+    """Persist session_hex onto recent probe JSONL rows for causal timeline."""
+    session_hex = str(session_hex or "").strip()
+    if not session_hex or not EVENT_LOG.is_file():
+        return {"ok": True, "tagged": 0}
+    now = time.time()
+    lines = EVENT_LOG.read_text(encoding="utf-8").splitlines()
+    tagged = 0
+    out_lines: list[str] = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            out_lines.append(line)
+            continue
+        meta = dict(row.get("meta") or {})
+        if meta.get("session_hex"):
+            out_lines.append(json.dumps(row, separators=(",", ":")))
+            continue
+        ts_str = str(row.get("ts") or "")
+        try:
+            ts = time.mktime(time.strptime(ts_str[:19], "%Y-%m-%dT%H:%M:%S"))
+        except (ValueError, TypeError):
+            ts = now
+        if now - ts <= window_sec:
+            meta["session_hex"] = session_hex
+            row["meta"] = meta
+            tagged += 1
+        out_lines.append(json.dumps(row, separators=(",", ":")))
+    if tagged:
+        EVENT_LOG.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
+    return {"ok": True, "session_hex": session_hex, "tagged": tagged}
+
+
 def correlate_session(session_hex: str) -> dict[str, Any]:
-    """Tag recent probe hits with the active game session hex for conn-lite cross-ref."""
+    """Tag recent probe hits with the active game session hex and persist to JSONL."""
     session_hex = str(session_hex or "").strip()
     if not session_hex:
         return {"ok": False, "error": "session_hex required"}
+    tag_result = tag_session_on_recent_probes(session_hex)
     recent = recent_events(limit=40)
-    correlated = 0
+    correlated = int(tag_result.get("tagged") or 0)
     for row in recent:
         ip = str(row.get("ip") or "").strip()
         if not ip:
             continue
-        meta = dict(row.get("meta") or {})
-        if meta.get("session_hex") == session_hex:
+        meta = row.get("meta") or {}
+        if str(meta.get("session_hex") or "") != session_hex:
             continue
-        meta["session_hex"] = session_hex
-        row["meta"] = meta
-        correlated += 1
         try:
             from . import wan_scan_block
 
@@ -247,4 +286,10 @@ def correlate_session(session_hex: str) -> dict[str, Any]:
                 reason=f"probe_sink:{session_hex[:8]}",
                 ttl_sec=int(_cfg().get("probe_block_ttl_sec") or 86400),
             )
-    return {"ok": True, "session_hex": session_hex, "correlated": correlated, "recent_probes": len(recent)}
+    return {
+        "ok": True,
+        "session_hex": session_hex,
+        "correlated": correlated,
+        "tagged_persisted": correlated,
+        "recent_probes": len(recent),
+    }

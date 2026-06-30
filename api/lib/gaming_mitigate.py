@@ -187,6 +187,24 @@ def _extract_vps_game_peer_ips(payload: dict[str, Any]) -> list[str]:
     return ips
 
 
+def _extract_peer_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    for path in (
+        ("peer_tracker", "peers"),
+        ("packet_analysis", "metrics", "inbound_identical_peers"),
+        ("packets", "metrics", "inbound_identical_peers"),
+        ("metrics", "inbound_identical_peers"),
+    ):
+        cur: Any = payload
+        for part in path:
+            if not isinstance(cur, dict):
+                cur = None
+                break
+            cur = cur.get(part)
+        if isinstance(cur, list):
+            return [p for p in cur if isinstance(p, dict)]
+    return []
+
+
 def _cheater_label(payload: dict[str, Any]) -> str:
     for key in ("cheater_label",):
         if payload.get(key):
@@ -401,7 +419,22 @@ def mitigate(payload: dict[str, Any]) -> dict[str, Any]:
 
     if cfg.get("auto_shield_sync", True):
         level = _shield_level(payload, signals, kick_spike=kick_spike)
-        shield = _sync_shield(level, peer_ips, cfg)
+        shield_peers = list(peer_ips)
+        peer_rows = _extract_peer_rows(payload)
+        mit_cfg = policies.gaming().get("mitigation") or {}
+        if peer_rows and mit_cfg.get("peer_rate_limits_enabled", True):
+            try:
+                from . import peer_rate_limits
+
+                pr = peer_rate_limits.apply_to_shield(peer_rows, phase=phase, sync_nft=False)
+                result["peer_rate_limits"] = pr
+                merged = pr.get("merged_peers") or []
+                shield_peers = list(dict.fromkeys([*shield_peers, *merged]))
+                if merged:
+                    result["actions"].append(f"peer_rate:{len(merged)}")
+            except Exception as exc:
+                result["peer_rate_limits"] = {"ok": False, "error": str(exc)}
+        shield = _sync_shield(level, shield_peers, cfg)
         result["shield"] = shield
         result["actions"].append(f"shield:{level}")
         if session_events:
@@ -462,6 +495,17 @@ def mitigate(payload: dict[str, Any]) -> dict[str, Any]:
         result["probe_sink_counters"] = probe_sink.poll_counters()
         if session_hex:
             result["probe_correlation"] = probe_sink.correlate_session(session_hex)
+
+    peer_rows = _extract_peer_rows(payload)
+    if session_hex and peer_rows:
+        try:
+            from . import probe_intel
+
+            result["probe_intel"] = probe_intel.ingest_session_peers(session_hex, peer_rows)
+            if result["probe_intel"].get("ingested"):
+                result["actions"].append(f"probe_intel:{result['probe_intel']['ingested']}")
+        except Exception as exc:
+            result["probe_intel"] = {"ok": False, "error": str(exc)}
 
     try:
         from . import nat as nat_mod
