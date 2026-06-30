@@ -7,42 +7,29 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, "/opt/array-firewall/api")
+ROOT = Path(__file__).resolve().parents[1] / "api"
+sys.path.insert(0, str(ROOT))
 
-from lib import ai_ops, policies  # noqa: E402
-
-
-def load_session(path: Path) -> dict:
-    if path.suffix == ".json":
-        doc = json.loads(path.read_text(encoding="utf-8"))
-        if "detail" in doc:
-            return doc["detail"]
-        if "peers" in doc:
-            return doc
-        if "files" in doc:
-            for f in doc["files"]:
-                data = f.get("data") or {}
-                if data.get("peers"):
-                    return data
-    raise ValueError(f"no peers in {path}")
-
-
-def replay(path: Path, *, mode: str = "observe") -> dict:
-    payload = {"peer_tracker": {"peers": load_session(path).get("peers") or []}}
-    data = policies.load()
-    ai = dict(data.get("ai_ops") or {})
-    ai["mode"] = mode
-    data["ai_ops"] = ai
-    policies.save(data)
-    return ai_ops.tick(sentinel_payload=payload, force=True, source=f"replay:{path.name}")
+from lib import replay_lab  # noqa: E402
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Replay session through AI fusion (dry or enforce)")
-    ap.add_argument("session_json", type=Path, help="Session bundle or peers JSON")
+    ap.add_argument("session_json", type=Path, nargs="?", help="Session bundle or peers JSON")
+    ap.add_argument("--hex", help="Session hex id under /var/lib/warzone-sentinel/sessions")
     ap.add_argument("--mode", default="observe", choices=["observe", "assist", "enforce"])
+    ap.add_argument("--batch", nargs="*", help="Batch replay session hex ids")
     args = ap.parse_args()
-    result = replay(args.session_json, mode=args.mode)
+    if args.batch:
+        print(json.dumps(replay_lab.batch_replay(args.batch, mode=args.mode), indent=2, default=str))
+        return 0
+    if args.hex:
+        result = replay_lab.replay_session_hex(args.hex, mode=args.mode)
+    elif args.session_json:
+        result = replay_lab.replay_path(args.session_json, mode=args.mode)
+    else:
+        print(json.dumps(replay_lab.status(), indent=2))
+        return 0
     print(json.dumps(result, indent=2, default=str))
     return 0
 

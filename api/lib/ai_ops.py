@@ -17,6 +17,7 @@ from typing import Any
 
 from . import ids, peer_blocklist, policies, sentinel
 from . import ai_learning, autopilot_audit, negative_allowlist, playability, reputation_graph
+from . import adaptive_posture, pre_burst_forecast
 
 STATE_FILE = Path("/var/lib/array-firewall/ai-ops.json")
 LOG_FILE = Path("/var/lib/array-firewall/ai-ops-log.jsonl")
@@ -211,7 +212,9 @@ def _fuse_context(*, sentinel_payload: dict[str, Any] | None = None) -> dict[str
         elif ctx.get("phase") in {"matchmaking", "in-match"}:
             imin = int(cfg.get("pre_burst_identical_min") or 6)
             imax = int(cfg.get("pre_burst_identical_max") or 19)
-            if imin <= identical <= imax and (vps or ctx["cheater_label"] in HOSTILE_LABELS):
+            if cfg.get("pre_burst_enabled", True) and imin <= identical <= imax and (
+                vps or ctx["cheater_label"] in HOSTILE_LABELS
+            ):
                 bump(ip, float(weights.get("pre_burst", 0.30)), f"pre_burst:{identical}")
                 ctx["signals"].append("pre_burst:forming")
         if ctx["cheater_label"] in HOSTILE_LABELS and identical >= 6:
@@ -350,6 +353,11 @@ def _fuse_context(*, sentinel_payload: dict[str, Any] | None = None) -> dict[str
     ctx["candidates"] = dict(
         sorted(scores.items(), key=lambda kv: kv[1]["score"], reverse=True)[:32]
     )
+    if cfg.get("pre_burst_enabled", True) and ctx.get("phase") == "matchmaking":
+        ctx["pre_burst_forecast"] = pre_burst_forecast.forecast(ctx)
+        pbf = ctx["pre_burst_forecast"]
+        if pbf.get("recommend_shield"):
+            ctx["signals"].append(f"pre_burst_forecast:{pbf.get('forecast_score')}")
     top = next(iter(ctx["candidates"].values()), None)
     if top and float(top.get("score") or 0) >= 0.85:
         ctx["fused_verdict"] = "hostile"
@@ -393,23 +401,40 @@ def _heuristic_plan(context: dict[str, Any]) -> dict[str, Any]:
 
     if gaming and verdict in {"suspicious", "hostile"}:
         top_score = float(next(iter((context.get("candidates") or {}).values()), {}).get("score") or 0)
-        if verdict == "hostile" and phase == "in-match":
+        posture = adaptive_posture.recommend(context) if cfg.get("adaptive_shield_enabled", True) else {}
+        if posture.get("shield_level"):
+            level = str(posture["shield_level"])
+        elif verdict == "hostile" and phase == "in-match":
             level = "in-match" if not tiny else "matchmaking"
         elif verdict == "hostile" or top_score >= 0.85:
             level = "strict" if phase == "in-match" else "matchmaking"
-        elif "pre_burst" in str(context.get("signals")):
+        elif any("pre_burst" in s for s in (context.get("signals") or [])):
             level = "peer-strict"
         else:
             level = "peer-strict"
-        conf = 0.55 if "pre_burst" in str(context.get("signals")) else (0.6 if verdict == "suspicious" else 0.85)
+        pbf = context.get("pre_burst_forecast") or {}
+        conf = 0.55 if pbf.get("recommend_shield") else (
+            0.55 if any("pre_burst" in s for s in (context.get("signals") or [])) else (
+                0.6 if verdict == "suspicious" else 0.85
+            )
+        )
         actions.append(
             {
                 "type": "shield",
                 "level": level,
                 "confidence": conf,
-                "reason": f"fused_verdict:{verdict}",
+                "reason": posture.get("headline") or f"fused_verdict:{verdict}",
             }
         )
+        if posture.get("buffer_profile") and cfg.get("auto_buffer_on_spike"):
+            actions.append(
+                {
+                    "type": "buffer_tune",
+                    "profile": posture["buffer_profile"],
+                    "confidence": conf,
+                    "reason": "adaptive_posture",
+                }
+            )
 
     max_blocks = int(cfg.get("max_blocks_per_tick") or 8)
     for ip in block_ips[:max_blocks]:
@@ -450,13 +475,14 @@ def _heuristic_plan(context: dict[str, Any]) -> dict[str, Any]:
         )
 
     if cfg.get("auto_buffer_on_spike") and gaming and verdict != "clean":
-        actions.append(
-            {
-                "type": "buffer_tune",
-                "confidence": 0.5,
-                "reason": f"lobby_{verdict}",
-            }
-        )
+        if not any(a.get("type") == "buffer_tune" for a in actions):
+            actions.append(
+                {
+                    "type": "buffer_tune",
+                    "confidence": 0.5,
+                    "reason": f"lobby_{verdict}",
+                }
+            )
 
     if cfg.get("auto_ids_on_hostile") and verdict == "hostile" and block_ips:
         actions.append(
@@ -713,9 +739,14 @@ def _execute_plan(plan: dict[str, Any], context: dict[str, Any], *, mode: str) -
                     offset=0,
                 ).get("rows") or []
                 unknowns = [r for r in rows if str(r.get("conn_type") or "") == "unknown"]
-                ordered = qce.prioritize_unknowns(unknowns)
+                from . import rqd
+
+                ordered_rows = rqd.prioritize_investigation(rows)
+                unknown_ordered = [r for r in ordered_rows if str(r.get("conn_type") or "") == "unknown"]
+                if not unknown_ordered:
+                    unknown_ordered = unknowns
                 blocked: list[str] = []
-                for row in ordered[:lim]:
+                for row in unknown_ordered[:lim]:
                     ip = str(row.get("ip") or "").strip()
                     if not ip:
                         continue
@@ -761,17 +792,27 @@ def _execute_plan(plan: dict[str, Any], context: dict[str, Any], *, mode: str) -
             try:
                 from . import qos
 
-                rec = qos.rqd_buffer_recommendation()
-                if rec.get("profile"):
+                profile = act.get("profile")
+                if profile:
                     applied = qos.buffer_tune_apply(
-                        str(rec["profile"]),
+                        str(profile),
                         auto_rqd=True,
                         phase=str(context.get("phase") or ""),
                         session_hex=str(context.get("session_hex") or "") or None,
                     )
-                    executed.append({"type": typ, "profile": rec["profile"], "result": applied})
+                    executed.append({"type": typ, "profile": profile, "result": applied})
                 else:
-                    skipped.append({**act, "why": "no_profile"})
+                    rec = qos.rqd_buffer_recommendation()
+                    if rec.get("profile"):
+                        applied = qos.buffer_tune_apply(
+                            str(rec["profile"]),
+                            auto_rqd=True,
+                            phase=str(context.get("phase") or ""),
+                            session_hex=str(context.get("session_hex") or "") or None,
+                        )
+                        executed.append({"type": typ, "profile": rec["profile"], "result": applied})
+                    else:
+                        skipped.append({**act, "why": "no_profile"})
             except Exception as exc:
                 skipped.append({**act, "why": str(exc)})
 
@@ -802,6 +843,7 @@ def tick(
         }
 
     context = _fuse_context(sentinel_payload=sentinel_payload)
+    context["adaptive_posture"] = adaptive_posture.recommend(context)
 
     ids_scan = {}
     if cfg.get("auto_ids_scan", True):
@@ -818,6 +860,15 @@ def tick(
         mode = "assist"
 
     execution = _execute_plan(plan, context, mode=mode)
+    if cfg.get("negative_allowlist_enabled", True) and mode == "enforce":
+        neg_blocks = negative_allowlist.enforce_negative_peers(
+            context.get("candidates") or {},
+            min_confidence=float(cfg.get("min_confidence_block", 0.72)),
+        )
+        if neg_blocks:
+            execution.setdefault("executed", []).extend(
+                [{"type": "negative_allowlist", "ip": b["ip"], "result": b["result"]} for b in neg_blocks]
+            )
     tick_id = autopilot_audit.record_tick(
         source=source,
         session_hex=str(context.get("session_hex") or "") or None,
@@ -843,11 +894,18 @@ def tick(
     )
     state = _load_state()
     state["last_playability"] = play
+    state["last_adaptive_posture"] = context.get("adaptive_posture")
+    state["last_pre_burst_forecast"] = context.get("pre_burst_forecast")
     state["last_tick_id"] = tick_id
 
     fleet_result = None
     ticks = int(state.get("ticks") or 0) + 1
-    if cfg.get("fleet_sync_enabled") and ticks % int(cfg.get("fleet_export_every_ticks") or 60) == 0:
+    fleet_interval = max(60, int(cfg.get("fleet_sync_interval_sec") or 300))
+    export_every = max(1, int(cfg.get("fleet_export_every_ticks") or max(1, fleet_interval // interval)))
+    last_fleet = float(state.get("last_fleet_sync_ts") or 0)
+    if cfg.get("fleet_sync_enabled") and (
+        ticks % export_every == 0 or (now - last_fleet) >= fleet_interval
+    ):
         try:
             from . import fleet_blocklist as fb
 
@@ -855,6 +913,7 @@ def tick(
             pull = cfg.get("fleet_pull_url")
             if pull:
                 fleet_result["pull"] = fb.pull_from_url(str(pull))
+            state["last_fleet_sync_ts"] = now
         except Exception as exc:
             fleet_result = {"ok": False, "error": str(exc)}
 
@@ -1004,6 +1063,8 @@ def status() -> dict[str, Any]:
             "subnet": cfg.get("min_confidence_subnet", 0.80),
         },
         "playability": state.get("last_playability"),
+        "adaptive_posture": state.get("last_adaptive_posture"),
+        "pre_burst_forecast": state.get("last_pre_burst_forecast"),
         "learning": ai_learning.status(),
         "reputation": reputation_graph.status(),
         "timeline": autopilot_audit.status(),

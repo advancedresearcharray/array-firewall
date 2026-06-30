@@ -494,6 +494,26 @@ class Handler(BaseHTTPRequestHandler):
 
             json_response(self, 200, fleet_blocklist.status())
             return
+        if path == "/api/v1/ai-ops/replay":
+            from lib import replay_lab
+
+            json_response(self, 200, replay_lab.status())
+            return
+        if path == "/api/v1/ai-ops/adaptive-posture":
+            st = ai_ops.status()
+            json_response(self, 200, st.get("adaptive_posture") or st.get("state", {}).get("last_adaptive_posture") or {"ok": True})
+            return
+        if path == "/api/v1/ai-ops/pre-burst":
+            st = ai_ops.status()
+            json_response(self, 200, st.get("pre_burst_forecast") or st.get("state", {}).get("last_pre_burst_forecast") or {"ok": True})
+            return
+        if path == "/api/v1/ai-ops/abuse-evidence":
+            from lib import abuse_evidence
+
+            _path_only, qs = self._path()
+            limit = int((qs.get("limit") or ["20"])[0])
+            json_response(self, 200, {"ok": True, "bundles": abuse_evidence.list_bundles(limit=limit)})
+            return
         if path == "/api/v1/dns/status":
             json_response(self, 200, dns_filter.status())
             return
@@ -725,6 +745,35 @@ class Handler(BaseHTTPRequestHandler):
                 from lib import fleet_blocklist
 
                 json_response(self, 200, fleet_blocklist.import_bundle(body, merge=body.get("merge", True)))
+            except Exception as exc:  # noqa: BLE001
+                json_response(self, 500, {"ok": False, "error": str(exc)})
+            return
+
+        if path == "/api/v1/ai-ops/replay/run":
+            try:
+                from lib import replay_lab
+
+                mode = str(body.get("mode") or "observe")
+                if body.get("session_hex"):
+                    json_response(self, 200, replay_lab.replay_session_hex(str(body["session_hex"]), mode=mode))
+                elif body.get("path"):
+                    json_response(self, 200, replay_lab.replay_path(Path(str(body["path"])), mode=mode))
+                else:
+                    json_response(self, 400, {"ok": False, "error": "session_hex or path required"})
+            except Exception as exc:  # noqa: BLE001
+                json_response(self, 500, {"ok": False, "error": str(exc)})
+            return
+
+        if path == "/api/v1/ai-ops/replay/batch":
+            try:
+                from lib import replay_lab
+
+                sessions = body.get("sessions") or body.get("session_hexs") or []
+                json_response(
+                    self,
+                    200,
+                    replay_lab.batch_replay([str(s) for s in sessions], mode=str(body.get("mode") or "observe")),
+                )
             except Exception as exc:  # noqa: BLE001
                 json_response(self, 500, {"ok": False, "error": str(exc)})
             return

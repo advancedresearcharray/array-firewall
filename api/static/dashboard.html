@@ -1309,6 +1309,8 @@
           <div class="stat"><label>Mode</label><div class="value" id="aiOpsMode">—</div></div>
           <div class="stat"><label>Playability</label><div class="value" id="aiOpsPlayScore">—</div></div>
           <div class="stat"><label>Posture</label><div class="value" id="aiOpsPosture">—</div></div>
+          <div class="stat"><label>Adaptive shield</label><div class="value mono" id="aiOpsAdaptive">—</div></div>
+          <div class="stat"><label>Pre-burst</label><div class="value mono" id="aiOpsPreBurst">—</div></div>
           <div class="stat"><label>Fused verdict</label><div class="value" id="aiOpsVerdict">—</div></div>
           <div class="stat"><label>Last tick</label><div class="value mono" id="aiOpsLastTick">—</div></div>
           <div class="stat"><label>Planned</label><div class="value" id="aiOpsPlanned">—</div></div>
@@ -1332,6 +1334,23 @@
           <button class="sm" id="aiOpsFleetExport">Export fleet blocklist</button>
           <button class="sm" id="aiOpsFleetImport">Import fleet blocklist</button>
           <span class="sub mono" id="aiOpsFleetStatus">Fleet sync idle</span>
+        </div>
+        <div class="section panel" style="margin-top:1rem;padding:1rem">
+          <div class="section-head"><div><h2>Replay lab</h2><p>Offline A/B fusion tuning — no live Xbox traffic</p></div></div>
+          <div class="section-actions" style="margin-bottom:.75rem">
+            <select id="aiOpsReplaySession" class="sm" style="min-width:14rem"><option value="">Load sessions…</option></select>
+            <select id="aiOpsReplayMode" class="sm"><option value="observe">observe</option><option value="assist">assist</option><option value="enforce">enforce</option></select>
+            <button class="sm primary" id="aiOpsReplayRun">Replay session</button>
+          </div>
+          <div class="hint-box mono" id="aiOpsReplayResult">Select a saved session and replay through fusion.</div>
+        </div>
+        <div class="table-wrap" style="margin-top:1rem">
+          <table>
+            <thead><tr><th>When</th><th>Session</th><th>Trigger</th><th>Evidence</th></tr></thead>
+            <tbody id="aiOpsEvidenceRows">
+              <tr><td colspan="4" class="sub">Abuse evidence bundles appear after subnet blocks.</td></tr>
+            </tbody>
+          </table>
         </div>
         <div class="table-wrap" style="margin-top:1rem">
           <table>
@@ -3069,6 +3088,18 @@
           const posture = play.posture || 'stay_and_mitigate';
           $('aiOpsPosture').innerHTML = `<span class="badge ok">${posture.replace(/_/g, ' ')}</span>`;
         }
+        const adapt = s.adaptive_posture || st.last_adaptive_posture || {};
+        if ($('aiOpsAdaptive')) {
+          $('aiOpsAdaptive').textContent = adapt.shield_level
+            ? `${adapt.shield_level} · ${adapt.buffer_profile || '—'}`
+            : '—';
+        }
+        const pbf = s.pre_burst_forecast || st.last_pre_burst_forecast || {};
+        if ($('aiOpsPreBurst')) {
+          $('aiOpsPreBurst').textContent = pbf.forecast_score != null
+            ? `${Number(pbf.forecast_score).toFixed(2)} · ${pbf.band || '—'}`
+            : '—';
+        }
         if ($('aiOpsPlayHeadline')) {
           $('aiOpsPlayHeadline').textContent = play.headline
             || 'Stay in lobby — autopilot shields probes and blocks repeat offenders.';
@@ -3123,6 +3154,28 @@
         if ($('aiOpsFleetStatus') && fleet.ok !== false) {
           const when = fleet.last_export ? new Date(fleet.last_export * 1000).toLocaleString() : 'never exported';
           $('aiOpsFleetStatus').textContent = `Fleet sync ${fleet.enabled ? 'on' : 'off'} · ${when}${fleet.sha256 ? ` · ${fleet.sha256.slice(0, 12)}…` : ''}`;
+        }
+        const replay = await api('/api/v1/ai-ops/replay');
+        const sel = $('aiOpsReplaySession');
+        if (sel && sel.options.length <= 1 && (replay.recent_sessions || []).length) {
+          (replay.recent_sessions || []).forEach(s => {
+            const o = document.createElement('option');
+            o.value = s.session_hex || '';
+            o.textContent = `${(s.session_hex || '').slice(0, 14)} · ${s.peer_count ?? '?'} peers`;
+            sel.appendChild(o);
+          });
+        }
+        const ev = await api('/api/v1/ai-ops/abuse-evidence?limit=8');
+        if ($('aiOpsEvidenceRows')) {
+          const bundles = ev.bundles || [];
+          $('aiOpsEvidenceRows').innerHTML = bundles.length
+            ? bundles.map(b => `<tr>
+                <td class="mono">${(b.exported_at || '').replace('T', ' ').replace('Z', '')}</td>
+                <td class="mono">${(b.session_hex || '—').slice(0, 14)}</td>
+                <td class="mono">${b.trigger_ip || '—'}</td>
+                <td class="sub">${b.reason || ''} · ${(b.peers || []).length} peers</td>
+              </tr>`).join('')
+            : '<tr><td colspan="4" class="sub">No abuse evidence bundles yet.</td></tr>';
         }
       } catch (e) {
         if ($('aiOpsSummary')) $('aiOpsSummary').textContent = 'AI Autopilot unavailable — ' + e.message;
@@ -3522,6 +3575,22 @@
         if (r.ok === false) throw new Error(r.error || 'Import failed');
         showError(`Fleet import: +${r.peers_merged ?? r.peer_added ?? 0} peers · +${r.subnets_merged ?? r.subnet_added ?? 0} subnets`);
         setTimeout(() => showError(''), 3000);
+        await refreshSecurity();
+      } catch (e) { showError(e.message); }
+    });
+    on('aiOpsReplayRun', async () => {
+      try {
+        const hex = ($('aiOpsReplaySession') || {}).value;
+        const mode = ($('aiOpsReplayMode') || {}).value || 'observe';
+        if (!hex) { showError('Select a session to replay'); return; }
+        if ($('aiOpsReplayResult')) $('aiOpsReplayResult').textContent = 'Replaying through fusion…';
+        const r = await api('/api/v1/ai-ops/replay/run', { method: 'POST', body: JSON.stringify({ session_hex: hex, mode }) });
+        const tick = r.tick || {};
+        const planned = (tick.plan || {}).actions || [];
+        const executed = (tick.execution || {}).executed || [];
+        if ($('aiOpsReplayResult')) {
+          $('aiOpsReplayResult').textContent = `Replay ${hex.slice(0, 14)} · mode ${mode} · planned ${planned.length} · executed ${executed.length} · verdict ${(tick.plan || {}).verdict || '—'}`;
+        }
         await refreshSecurity();
       } catch (e) { showError(e.message); }
     });

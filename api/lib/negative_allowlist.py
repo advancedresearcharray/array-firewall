@@ -79,3 +79,30 @@ def list_cidrs() -> list[str]:
 def status() -> dict[str, Any]:
     data = _load()
     return {"ok": True, "count": len(data.get("cidrs") or []), "cidrs": list_cidrs()[:32]}
+
+
+def enforce_negative_peers(
+    candidates: dict[str, Any],
+    *,
+    min_confidence: float = 0.72,
+) -> list[dict[str, Any]]:
+    """Block peers landing in negative CIDR space (proactive deny, stay-in-lobby)."""
+    from . import peer_blocklist
+
+    blocked: list[dict[str, Any]] = []
+    for ip, row in candidates.items():
+        if not is_negative(str(ip)):
+            continue
+        score = float(row.get("score") or 0)
+        if score < min_confidence and not row.get("vps_probe"):
+            continue
+        if peer_blocklist.in_game_allowlist(str(ip)):
+            continue
+        result = peer_blocklist.add_peers(
+            [str(ip)],
+            reason="negative_allowlist",
+            ttl_sec=604800,
+        )
+        blocked.append({"ip": ip, "result": result, "score": score})
+    return blocked
+
