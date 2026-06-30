@@ -171,6 +171,12 @@ def add_peers(
         added += 1
         if abuse_enabled and abuse_mod:
             abuse_mod.record_incident(ip, reason=reason, meta={"hits": entry["hits"], "ttl_sec": ttl})
+        try:
+            from . import wan_scan_block as wsb
+
+            wsb.block_scanner(ip, reason=reason, ttl_sec=ttl)
+        except ImportError:
+            pass
 
     if len(peers) > max_peers:
         ranked = sorted(

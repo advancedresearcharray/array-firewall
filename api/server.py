@@ -326,6 +326,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/v1/qos/upload-boost":
             json_response(self, 200, qos.upload_boost_status())
             return
+        if path == "/api/v1/qos/download-boost":
+            json_response(self, 200, qos.download_boost_status())
+            return
         if path == "/api/v1/qos/buffer":
             json_response(self, 200, qos.buffer_tune_status())
             return
@@ -988,6 +991,19 @@ class Handler(BaseHTTPRequestHandler):
                     json_response(self, 200, qos.upload_boost_relax(session_hex=session_hex, phase=phase))
                 else:
                     json_response(self, 200, qos.upload_boost_apply(session_hex=session_hex, phase=phase))
+            except Exception as exc:  # noqa: BLE001
+                json_response(self, 500, {"ok": False, "error": str(exc)})
+            return
+
+        if path == "/api/v1/qos/download-boost":
+            try:
+                action = str(body.get("action") or "apply").lower()
+                session_hex = str(body.get("session_hex") or "").strip() or None
+                phase = str(body.get("phase") or "").strip() or None
+                if action in ("relax", "off"):
+                    json_response(self, 200, qos.download_boost_relax(session_hex=session_hex, phase=phase))
+                else:
+                    json_response(self, 200, qos.download_boost_apply(session_hex=session_hex, phase=phase))
             except Exception as exc:  # noqa: BLE001
                 json_response(self, 500, {"ok": False, "error": str(exc)})
             return

@@ -350,6 +350,13 @@
         "xbox_memlimit": "4mb",
         "ifb_memlimit": "8mb"
       }
+    },
+    "download_assist": {
+      "enabled": true,
+      "ceil_factor": 0.98,
+      "ifb_rtt": "3ms",
+      "ifb_memlimit": "32mb",
+      "auto_boost_in_lobby": true
     }
   },
   "perf": {

@@ -18,6 +18,7 @@ ALLOWED=(
   gaming-moca-tune.sh
   gaming-route-pref.sh
   gaming-upload-boost.sh
+  gaming-download-boost.sh
 )
 
 script="${1:-}"

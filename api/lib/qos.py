@@ -548,6 +548,8 @@ def autorate_bandwidth(**kwargs: Any) -> dict[str, Any]:
 
 UPLOAD_BOOST_STATE = Path("/var/lib/array-firewall/upload-boost.state")
 UPLOAD_BOOST_BASELINE = Path("/var/lib/array-firewall/upload-boost.baseline.json")
+DOWNLOAD_BOOST_STATE = Path("/var/lib/array-firewall/download-boost.state")
+DOWNLOAD_BOOST_BASELINE = Path("/var/lib/array-firewall/download-boost.baseline.json")
 BUFFER_TUNE_STATE = Path("/var/lib/array-firewall/buffer-tune.state")
 
 VALID_BUFFER_PROFILES = frozenset({"gaming", "normal", "light", "desync", "kick"})
@@ -638,6 +640,81 @@ def upload_boost_relax(*, session_hex: str | None = None, phase: str | None = No
             session_hex=session_hex,
             phase=phase,
             detail="upload assist relaxed",
+        )
+    return result
+
+
+def download_boost_config() -> dict[str, Any]:
+    defaults: dict[str, Any] = {
+        "enabled": True,
+        "ceil_factor": 0.98,
+        "ifb_rtt": "3ms",
+        "ifb_memlimit": "32mb",
+    }
+    da = dict(policies.gaming().get("download_assist") or {})
+    defaults.update(da)
+    return defaults
+
+
+def download_boost_status() -> dict[str, Any]:
+    from . import gaming as gaming_mod
+
+    cfg = download_boost_config()
+    state = _parse_kv_state(DOWNLOAD_BOOST_STATE)
+    baseline = None
+    if DOWNLOAD_BOOST_BASELINE.is_file():
+        try:
+            baseline = json.loads(DOWNLOAD_BOOST_BASELINE.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            baseline = None
+    tc_ifb = ""
+    try:
+        raw = subprocess.check_output(["tc", "qdisc", "show", "dev", "ifb0"], text=True, timeout=5)
+        for line in raw.splitlines():
+            if "qdisc cake" in line and "root" in line:
+                tc_ifb = line.strip()
+                break
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        tc_ifb = "unavailable"
+    return {
+        "ok": True,
+        "active": state.get("active") == "1",
+        "config": cfg,
+        "state": state,
+        "baseline": baseline,
+        "tc_ifb_cake": tc_ifb,
+        "script": gaming_mod.run_script_api("gaming-download-boost.sh", ["status"]),
+    }
+
+
+def download_boost_apply(*, session_hex: str | None = None, phase: str | None = None) -> dict[str, Any]:
+    from . import gaming as gaming_mod, session_events
+
+    if not download_boost_config().get("enabled", True):
+        return {"ok": False, "error": "download_assist disabled in policy"}
+    result = gaming_mod.run_script_api("gaming-download-boost.sh", ["apply"])
+    result["status"] = download_boost_status()
+    if result.get("ok"):
+        session_events.append(
+            "download.boost",
+            session_hex=session_hex,
+            phase=phase,
+            detail="download assist applied",
+        )
+    return result
+
+
+def download_boost_relax(*, session_hex: str | None = None, phase: str | None = None) -> dict[str, Any]:
+    from . import gaming as gaming_mod, session_events
+
+    result = gaming_mod.run_script_api("gaming-download-boost.sh", ["relax"])
+    result["status"] = download_boost_status()
+    if result.get("ok"):
+        session_events.append(
+            "download.relax",
+            session_hex=session_hex,
+            phase=phase,
+            detail="download assist relaxed",
         )
     return result
 

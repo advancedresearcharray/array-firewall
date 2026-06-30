@@ -136,17 +136,12 @@ table ip nat {{{prerouting}
   }}
 }}"""
     if xbox_router and xbox_ip:
-        snat_target = wan_ip if re.match(r"^(\d{1,3}\.){3}\d{1,3}$", wan_ip) else "masquerade"
-        if snat_target == "masquerade":
-            snat_rule = (
-                f'    iifname "{lan_if}" oifname "{wan_if}" ip saddr {xbox_ip} masquerade '
-                f'comment "xbox-wan-snat"\n'
-            )
-        else:
-            snat_rule = (
-                f'    iifname "{lan_if}" oifname "{wan_if}" ip saddr {xbox_ip} '
-                f'snat ip to {snat_target} comment "xbox-wan-snat"\n'
-            )
+        # Masquerade follows DHCP WAN address changes; static snat to wan_ip breaks
+        # when eth1 renews (e.g. .23 -> .24) until rules are regenerated.
+        snat_rule = (
+            f'    iifname "{lan_if}" oifname "{wan_if}" ip saddr {xbox_ip} masquerade '
+            f'comment "xbox-wan-snat"\n'
+        )
         return f"""
 table ip nat {{{prerouting}
   chain postrouting {{

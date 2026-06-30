@@ -407,6 +407,17 @@ clean_ruleset_interval=600
 
 
 _ensure_wan_nat_active = False
+_SNAT_IP_RE = re.compile(r"snat(?: ip)? to (\d{1,3}(?:\.\d{1,3}){3})")
+
+
+def _current_wan_ipv4() -> str:
+    ifaces = nft._ifaces()
+    c = _conf()
+    return nft._iface_ipv4(ifaces["wan_if"]) or str(c.get("WAN_IP", "")).strip()
+
+
+def _postrouting_snat_targets(post: str) -> list[str]:
+    return _SNAT_IP_RE.findall(post)
 
 
 def _wan_nat_ok() -> bool:
@@ -428,6 +439,12 @@ def _wan_nat_ok() -> bool:
     if xbox_ip and xbox_ip not in post:
         return False
     if "snat" not in post and "masquerade" not in post:
+        return False
+    wan_ip = _current_wan_ipv4()
+    snat_ips = _postrouting_snat_targets(post)
+    if snat_ips and wan_ip and any(ip != wan_ip for ip in snat_ips):
+        return False
+    if "masquerade" not in post and wan_ip and not snat_ips:
         return False
     dmz_cfg = dmz()
     if not dmz_cfg.get("enabled"):
@@ -453,6 +470,13 @@ def _apply_wan_nat_rules_unlocked() -> dict[str, Any]:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f"wan-nat.{os.getpid()}.tmp")
     tmp.write_text(fragment, encoding="utf-8")
+    for chain in ("postrouting", "prerouting"):
+        subprocess.run(
+            ["nft", "flush", "chain", "ip", "nat", chain],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
     proc = nft.apply_nft_file_unlocked(tmp, timeout=10)
     if proc.returncode != 0:
         err = (proc.stderr or proc.stdout or "wan nat apply failed").strip()

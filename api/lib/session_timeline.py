@@ -12,6 +12,7 @@ STATE_FILES = {
     "shield": Path("/var/lib/array-firewall/packet-shield.state"),
     "buffer": Path("/var/lib/array-firewall/buffer-tune.state"),
     "upload_boost": Path("/var/lib/array-firewall/upload-boost.state"),
+    "download_boost": Path("/var/lib/array-firewall/download-boost.state"),
     "route_pref": Path("/var/lib/array-firewall/gaming-route.state"),
 }
 

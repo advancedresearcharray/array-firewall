@@ -59,7 +59,7 @@ def _cfg() -> dict[str, Any]:
         "min_mitigate_interval_sec": 15,
         "repeat_offender_hits": 3,
         "repeat_offender_ttl_sec": 604800,
-        "auto_block_vps_peers": False,
+        "auto_block_vps_peers": True,
         "auto_block_vultr_only": False,
         "vps_peer_ttl_sec": 604800,
         "auto_route_pref_in_match": not tiny_only,
@@ -70,7 +70,6 @@ def _cfg() -> dict[str, Any]:
     if tiny_only:
         base["auto_block_peers"] = False
         base["auto_ids_block"] = False
-        base["auto_block_vps_peers"] = False
         base["auto_route_pref_in_match"] = False
         base["lobby_reputation_gate"] = False
     return base

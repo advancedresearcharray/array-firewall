@@ -304,6 +304,7 @@ def ensure_mitigation_policy(*, idle_shield: str = "console") -> dict[str, Any]:
     for key, val in _DEFAULT_MITIGATION.items():
         mit.setdefault(key, val)
     upload = gaming.setdefault("upload_assist", {})
+    download = gaming.setdefault("download_assist", {})
     for key, val in _DEFAULT_UPLOAD_ASSIST.items():
         if key == "buffer":
             buf = upload.setdefault("buffer", {})
@@ -318,7 +319,7 @@ def ensure_mitigation_policy(*, idle_shield: str = "console") -> dict[str, Any]:
     if str(cfg.get("packet_shield", "off")).lower() in {"off", "normal", ""}:
         cfg["packet_shield"] = idle_shield
     policies.save(data)
-    return {"mitigation": mit, "upload_assist": upload, "idle_shield": idle_shield}
+    return {"mitigation": mit, "upload_assist": upload, "download_assist": download, "idle_shield": idle_shield}
 
 
 def apply_xbox_secure_stack(
@@ -326,6 +327,7 @@ def apply_xbox_secure_stack(
     shield_level: str = "console",
     buffer_profile: str = "desync",
     apply_upload_boost: bool = True,
+    apply_download_boost: bool = True,
 ) -> dict[str, Any]:
     """
     Open NAT (DMZ + UPnP) with anticheat: console/in-match shield, honeypot, peer blocks, desync buffer.
@@ -347,9 +349,13 @@ def apply_xbox_secure_stack(
 
     buffer = qos.buffer_tune_apply(buffer_profile)
     upload = None
+    download = None
     upload_cfg = (policies.gaming().get("upload_assist") or {})
     if apply_upload_boost and upload_cfg.get("enabled", True):
         upload = qos.upload_boost_apply()
+    download_cfg = (policies.gaming().get("download_assist") or {})
+    if apply_download_boost and download_cfg.get("enabled", True):
+        download = qos.download_boost_apply()
 
     probe = {"running": False}
     try:
@@ -373,6 +379,7 @@ def apply_xbox_secure_stack(
         "packet_shield": _shield_status(),
         "buffer": buffer,
         "upload_boost": upload,
+        "download_boost": download,
         "probe_sink": probe,
         "peer_blocklist": peer_blocklist.status(),
     }
