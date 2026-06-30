@@ -390,8 +390,50 @@
     }
   }
 
+  async function refreshMatchCockpit() {
+    if (!$('goCkPhase')) return;
+    try {
+      const r = await api('/api/v1/gaming/match-cockpit');
+      const s = r.sentinel || {};
+      const ai = r.ai_ops || {};
+      const play = ai.playability || {};
+      const pbf = ai.pre_burst_forecast || {};
+      const mesh = r.mesh_reputation || {};
+      setText('goCkPhase', s.phase || '—');
+      setText('goCkVerdict', (s.cheater_label || '—').toString());
+      setHtml('goCkAiOps', ai.mode ? badge(ai.mode === 'enforce' ? 'warn' : 'ok', ai.mode) : '—');
+      setHtml('goCkPlay', play.headline
+        ? badge(play.posture === 'stay_and_mitigate' ? 'ok' : 'warn', 'stay & mitigate')
+        : '—');
+      setText('goCkPreBurst', pbf.forecast_score != null ? `${pbf.forecast_score} (${pbf.band || '?'})` : '—');
+      setText('goCkMesh', mesh.clique_count != null ? String(mesh.clique_count) : '0');
+      setText('goCkHeadline', play.headline || pbf.headline || 'Monitoring — mitigation active while you stay in lobby.');
+      const peers = ((s.peer_tracker || {}).peers || []).slice(0, 16);
+      const body = $('goCkPeers');
+      if (!peers.length) {
+        body.innerHTML = '<tr><td colspan="4" class="sub">No active peers</td></tr>';
+      } else {
+        body.innerHTML = peers.map(p => `<tr>
+          <td class="mono">${esc(p.ip || p.remote || '—')}</td>
+          <td>${esc(String(p.identical_count ?? p.max_burst ?? '—'))}</td>
+          <td>${p.vps_probe ? badge('warn', 'vps') : '—'}</td>
+          <td>${esc(p.role || p.roleId || '—')}</td>
+        </tr>`).join('');
+      }
+    } catch (e) {
+      setText('goCkHeadline', e.message);
+    }
+  }
+
   async function refreshInnovation() {
-    await Promise.all([refreshTimeline(), refreshRoutePref(), refreshAllowlistLearn(), refreshPatternEncode(), refreshQce()]);
+    await Promise.all([
+      refreshTimeline(),
+      refreshRoutePref(),
+      refreshAllowlistLearn(),
+      refreshPatternEncode(),
+      refreshQce(),
+      refreshMatchCockpit(),
+    ]);
   }
 
   async function refreshQce() {
@@ -687,6 +729,7 @@
     });
 
     on('goTimelineRefresh', () => refreshTimeline());
+    on('goCockpitRefresh', () => refreshMatchCockpit());
     on('goRouteApply', async () => {
       try {
         const gw = ($('goRouteGwIn') || {}).value?.trim();

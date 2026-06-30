@@ -61,6 +61,31 @@ def list_sources(*, limit: int = 40) -> list[dict[str, Any]]:
     return out
 
 
+def replay_payload(payload: dict[str, Any], *, mode: str = "observe") -> dict[str, Any]:
+    """Replay a session payload dict through fusion (golden-session CI)."""
+    from . import ai_ops
+
+    saved = (ai_ops._cfg().get("mode"),)
+    try:
+        data = policies.load()
+        data.setdefault("ai_ops", {})["mode"] = mode
+        policies.save(data)
+        tick = ai_ops.tick(sentinel_payload=payload, source="replay_lab", force=True)
+        plan = tick.get("plan") or {}
+        return {
+            "ok": True,
+            "mode": mode,
+            "verdict": plan.get("verdict"),
+            "execution": tick.get("execution") or {},
+            "plan": plan,
+        }
+    finally:
+        data = policies.load()
+        if saved[0]:
+            data.setdefault("ai_ops", {})["mode"] = saved[0]
+            policies.save(data)
+
+
 def replay_path(path: Path, *, mode: str = "observe", restore_mode: str | None = None) -> dict[str, Any]:
     peers_doc = _load_peers_from_path(path)
     payload = {

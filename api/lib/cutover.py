@@ -86,6 +86,30 @@ def backup_state() -> dict[str, Any]:
     return {"ok": True, "backup": str(BACKUP)}
 
 
+def dry_run() -> dict[str, Any]:
+    """Simulate cutover steps without changing live network role."""
+    pf = preflight()
+    net = policies.network()
+    steps = [
+        {"step": "backup_state", "would_run": True, "safe": True},
+        {"step": "set_role_gateway", "would_run": True, "safe": pf.get("ok", False)},
+        {"step": "enable_cutover_flag", "would_run": True, "safe": pf.get("ok", False)},
+        {"step": "restart_dnsmasq", "would_run": True, "safe": pf.get("ok", False)},
+        {"step": "apply_nft_gateway", "would_run": True, "safe": pf.get("ok", False)},
+    ]
+    return {
+        "ok": pf.get("ok", False),
+        "dry_run": True,
+        "current_role": policies.role(),
+        "cutover_enabled": policies.cutover_enabled(),
+        "lan_gateway": net.get("gateway_ip"),
+        "preflight": pf,
+        "planned_steps": steps,
+        "estimated_outage_sec": 120,
+        "rollback": "cutover-rollback.sh or restore /var/lib/array-firewall/cutover-backup.json",
+    }
+
+
 def status() -> dict[str, Any]:
     pf = preflight()
     return {

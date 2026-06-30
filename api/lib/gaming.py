@@ -239,6 +239,48 @@ def probe_intel_status() -> dict[str, Any]:
     return probe_intel.status()
 
 
+def match_cockpit() -> dict[str, Any]:
+    """Unified match view — Sentinel + ai_ops + playability (stay in lobby)."""
+    out: dict[str, Any] = {"ok": True, "posture": "stay_and_mitigate"}
+    try:
+        from . import sentinel
+
+        dash = sentinel.dashboard_data() or {}
+        out["sentinel"] = {
+            "phase": dash.get("phase"),
+            "session_hex": dash.get("session_hex"),
+            "cheater_label": (dash.get("cheater_lobby") or {}).get("label"),
+            "network_guard": dash.get("network_guard"),
+            "peer_tracker": dash.get("peer_tracker"),
+            "game_state": dash.get("game_state"),
+        }
+        out["session_hex"] = dash.get("session_hex") or (dash.get("peer_tracker") or {}).get("session_hex")
+    except Exception as exc:
+        out["sentinel"] = {"ok": False, "error": str(exc)}
+    try:
+        from . import ai_ops
+
+        st = ai_ops.status()
+        out["ai_ops"] = {
+            "mode": st.get("mode"),
+            "playability": st.get("playability"),
+            "pre_burst_forecast": st.get("pre_burst_forecast"),
+            "game_fusion": st.get("game_fusion"),
+            "mesh_reputation": st.get("mesh_reputation"),
+        }
+    except Exception as exc:
+        out["ai_ops"] = {"ok": False, "error": str(exc)}
+    try:
+        from . import peer_rate_limits, mesh_reputation, adaptive_honeypot
+
+        out["peer_rate_limits"] = peer_rate_limits.status().get("analysis")
+        out["mesh_reputation"] = mesh_reputation.status()
+        out["adaptive_honeypot"] = adaptive_honeypot.status().get("state")
+    except Exception:
+        pass
+    return out
+
+
 def allowlist_learn_status() -> dict[str, Any]:
     from . import allowlist_learn
 

@@ -1324,9 +1324,9 @@
         <div class="hint-box" id="aiOpsPlayHeadline" style="margin-top:.5rem">Playability advisor loads after first tick.</div>
         <div class="table-wrap" style="margin-top:1rem">
           <table>
-            <thead><tr><th>When</th><th>Source</th><th>Action</th><th>Detail</th></tr></thead>
+            <thead><tr><th>When</th><th>Source</th><th>Action</th><th>Causal</th><th>Detail</th></tr></thead>
             <tbody id="aiOpsTimeline">
-              <tr><td colspan="4" class="sub">Timeline empty — run a tick or enter a match.</td></tr>
+              <tr><td colspan="5" class="sub">Timeline empty — run a tick or enter a match.</td></tr>
             </tbody>
           </table>
         </div>
@@ -1599,6 +1599,7 @@
         <button type="button" class="subtab" data-go="peers">Peer blocklist</button>
         <button type="button" class="subtab" data-go="intel">Intel &amp; abuse</button>
         <button type="button" class="subtab" data-go="innovation">Innovation</button>
+        <button type="button" class="subtab" data-go="cockpit">Match cockpit</button>
         <button type="button" class="subtab" data-go="sentinel">Sentinel embed</button>
       </div>
 
@@ -1865,6 +1866,28 @@
             <button class="sm" id="goQceTelemetry">Measure telemetry</button>
           </div>
           <textarea class="policy-textarea" id="goQceOut" placeholder="QCE measurement…" style="margin-top:.65rem;min-height:100px"></textarea>
+        </section>
+      </div>
+
+      <div class="subpanel" id="go-panel-cockpit">
+        <section class="section panel">
+          <div class="section-head">
+            <div><h2>Unified match cockpit</h2><p>Sentinel verdict + autopilot + playability — stay in lobby, no iframe.</p></div>
+            <div class="section-actions"><button class="sm" id="goCockpitRefresh">Refresh</button></div>
+          </div>
+          <div class="stat-grid">
+            <div class="stat"><label>Phase</label><div class="value" id="goCkPhase">—</div></div>
+            <div class="stat"><label>Verdict</label><div class="value" id="goCkVerdict">—</div></div>
+            <div class="stat"><label>Autopilot</label><div class="value" id="goCkAiOps">—</div></div>
+            <div class="stat"><label>Playability</label><div class="value" id="goCkPlay">—</div></div>
+            <div class="stat"><label>Pre-burst</label><div class="value mono" id="goCkPreBurst">—</div></div>
+            <div class="stat"><label>Mesh cliques</label><div class="value" id="goCkMesh">—</div></div>
+          </div>
+          <p class="sub" id="goCkHeadline" style="margin:.75rem 0">—</p>
+          <div class="table-wrap">
+            <table><thead><tr><th>IP</th><th>Identical</th><th>VPS</th><th>Role</th></tr></thead>
+            <tbody id="goCkPeers"><tr><td colspan="4" class="sub">No active peers</td></tr></tbody></table>
+          </div>
         </section>
       </div>
 
@@ -3145,16 +3168,25 @@
           : '<tr><td colspan="3" class="sub">No fusion candidates yet.</td></tr>';
 
         const tl = await api('/api/v1/ai-ops/timeline?limit=25');
-        const events = tl.events || [];
+        const cockpit = await api('/api/v1/gaming/match-cockpit').catch(() => ({}));
+        const sessionHex = cockpit.session_hex || (cockpit.sentinel || {}).session_hex || st.session_hex || '';
+        let events = tl.events || [];
+        if (sessionHex) {
+          try {
+            const causal = await api(`/api/v1/gaming/sessions/${encodeURIComponent(sessionHex)}/causal-timeline?limit=30`);
+            if ((causal.events || []).length) events = causal.events;
+          } catch (_) { /* fallback to autopilot timeline */ }
+        }
         if ($('aiOpsTimeline')) {
           $('aiOpsTimeline').innerHTML = events.length
             ? events.map(e => `<tr>
-                <td class="mono">${(e.ts_iso || '').replace('T', ' ').replace('Z', '')}</td>
-                <td class="sub">${e.source || '—'}</td>
-                <td>${e.action_type || '—'}</td>
+                <td class="mono">${(e.ts_iso || e.ts || '').toString().replace('T', ' ').replace('Z', '').slice(0, 19)}</td>
+                <td class="sub">${e.source || e.bucket || '—'}</td>
+                <td>${e.kind || e.action_type || '—'}</td>
+                <td class="sub">${e.causal_label || '—'}</td>
                 <td class="sub">${e.detail || ''}${e.session_hex ? ` · ${e.session_hex}` : ''}</td>
               </tr>`).join('')
-            : '<tr><td colspan="4" class="sub">No autopilot actions logged yet.</td></tr>';
+            : '<tr><td colspan="5" class="sub">No autopilot actions logged yet.</td></tr>';
         }
         const fleet = await api('/api/v1/ai-ops/fleet');
         if ($('aiOpsFleetStatus') && fleet.ok !== false) {

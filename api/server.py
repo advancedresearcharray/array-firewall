@@ -256,6 +256,24 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/v1/gaming/peer-rate-limits":
             json_response(self, 200, gaming.peer_rate_limits_status())
             return
+        if path == "/api/v1/gaming/mesh-reputation":
+            from lib import mesh_reputation
+
+            json_response(self, 200, mesh_reputation.status())
+            return
+        if path == "/api/v1/gaming/adaptive-honeypot":
+            from lib import adaptive_honeypot
+
+            json_response(self, 200, adaptive_honeypot.status())
+            return
+        if path == "/api/v1/gaming/gaming-probe-ids":
+            from lib import gaming_probe_ids
+
+            json_response(self, 200, gaming_probe_ids.status())
+            return
+        if path == "/api/v1/gaming/match-cockpit":
+            json_response(self, 200, gaming.match_cockpit())
+            return
         if path == "/api/v1/afld/status":
             json_response(self, 200, afld.status())
             return
@@ -319,6 +337,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/v1/cutover/preflight":
             json_response(self, 200, cutover.preflight())
+            return
+        if path == "/api/v1/cutover/dry-run":
+            json_response(self, 200, cutover.dry_run())
             return
         if path == "/api/v1/dhcp":
             json_response(self, 200, dhcp.status())

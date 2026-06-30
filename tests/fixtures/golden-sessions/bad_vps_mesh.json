@@ -1,0 +1,26 @@
+{
+  "name": "bad_vps_mesh",
+  "session_hex": "golden_bad",
+  "phase": "in-match",
+  "expect": {
+    "verdict": "hostile"
+  },
+  "payload": {
+    "phase": "in-match",
+    "cheater_label": "LIKELY",
+    "peer_tracker": {
+      "peers": [
+        {
+          "ip": "45.76.1.1",
+          "identical_count": 24,
+          "vps_probe": true
+        },
+        {
+          "ip": "45.76.1.2",
+          "identical_count": 22,
+          "vps_probe": true
+        }
+      ]
+    }
+  }
+}

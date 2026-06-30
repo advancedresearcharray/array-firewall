@@ -70,13 +70,34 @@ def import_bundle(doc: dict[str, Any], *, merge: bool = True) -> dict[str, Any]:
     return {"ok": True, "peers_merged": peer_added, "subnets_merged": subnet_added}
 
 
-def pull_from_url(url: str) -> dict[str, Any]:
+def pull_from_url(url: str, *, merge: bool = True) -> dict[str, Any]:
     import urllib.request
 
     req = urllib.request.Request(url, headers={"Accept": "application/json"})
     with urllib.request.urlopen(req, timeout=15) as resp:
         doc = json.loads(resp.read().decode())
-    return import_bundle(doc)
+    return import_bundle(doc, merge=merge)
+
+
+def scheduled_pull(url: str, *, merge_policy: str = "merge") -> dict[str, Any]:
+    """Pull fleet bundle with merge policy: merge | prefer_local | prefer_remote."""
+    import urllib.request
+
+    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        doc = json.loads(resp.read().decode())
+    expected = doc.get("sha256")
+    if expected:
+        raw = json.dumps({k: v for k, v in doc.items() if k != "sha256"}, sort_keys=True, separators=(",", ":"))
+        if hashlib.sha256(raw.encode()).hexdigest() != expected:
+            return {"ok": False, "error": "sha256 mismatch", "url": url}
+    if merge_policy == "prefer_local":
+        return {"ok": True, "skipped": True, "reason": "prefer_local", "url": url}
+    merge = merge_policy != "prefer_remote"
+    result = import_bundle(doc, merge=merge)
+    result["merge_policy"] = merge_policy
+    result["url"] = url
+    return result
 
 
 def status() -> dict[str, Any]:

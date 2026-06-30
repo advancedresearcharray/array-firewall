@@ -495,8 +495,48 @@ def mitigate(payload: dict[str, Any]) -> dict[str, Any]:
         result["probe_sink_counters"] = probe_sink.poll_counters()
         if session_hex:
             result["probe_correlation"] = probe_sink.correlate_session(session_hex)
+        try:
+            from . import adaptive_honeypot
+
+            recent = probe_sink.recent_events(limit=24)
+            ah = adaptive_honeypot.ingest_probe_hits(recent, session_hex=session_hex or "")
+            result["adaptive_honeypot"] = ah
+            if ah.get("active_ports"):
+                result["actions"].append(f"honeypot_ports:{len(ah['active_ports'])}")
+        except Exception as exc:
+            result["adaptive_honeypot"] = {"ok": False, "error": str(exc)}
 
     peer_rows = _extract_peer_rows(payload)
+    if peer_rows and phase in {"matchmaking", "in-match"}:
+        try:
+            from . import gaming_probe_ids
+
+            gp = gaming_probe_ids.enforce_from_peers(peer_rows, phase=phase)
+            result["gaming_probe_ids"] = gp
+            if gp.get("blocked"):
+                result["actions"].append(f"gaming_probe_ids:{gp['blocked']}")
+        except Exception as exc:
+            result["gaming_probe_ids"] = {"ok": False, "error": str(exc)}
+
+    if phase == "in-match":
+        metrics = {}
+        pkt = payload.get("packets") or payload.get("packet_analysis") or {}
+        if isinstance(pkt, dict):
+            metrics = pkt.get("metrics") or {}
+        jitter = metrics.get("wan_jitter") or metrics.get("server_jitter")
+        mit_cfg = policies.gaming().get("mitigation") or {}
+        if mit_cfg.get("download_desync_enabled", True) and jitter:
+            try:
+                if float(jitter) >= float(mit_cfg.get("download_desync_jitter_min") or 0.35):
+                    from . import qos
+
+                    dl = qos.download_boost_apply(session_hex=session_hex or None, phase=phase)
+                    result["download_desync"] = dl
+                    if dl.get("ok"):
+                        result["actions"].append("download_boost:desync")
+            except (TypeError, ValueError):
+                pass
+
     if session_hex and peer_rows:
         try:
             from . import probe_intel

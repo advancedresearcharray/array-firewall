@@ -1,0 +1,16 @@
+{
+  "name": "clean_lobby",
+  "session_hex": "golden_clean",
+  "phase": "matchmaking",
+  "expect": {
+    "max_blocks": 0,
+    "shield_optional": true
+  },
+  "payload": {
+    "phase": "matchmaking",
+    "cheater_label": "CLEAN",
+    "peer_tracker": {
+      "peers": []
+    }
+  }
+}

@@ -299,7 +299,19 @@
       "probe_block_ttl_sec": 86400,
       "tcp_rst_non_game": true,
       "auto_route_pref_in_match": true,
-      "peer_rate_limits_enabled": true
+      "peer_rate_limits_enabled": true,
+      "download_desync_enabled": true,
+      "download_desync_jitter_min": 0.35,
+      "gaming_probe_ids": {
+        "enabled": true,
+        "min_identical": 10,
+        "require_vps_probe": true
+      },
+      "adaptive_honeypot": {
+        "enabled": true,
+        "rotate_every_sec": 900,
+        "active_ports": 6
+      }
     },
     "afld": {
       "enabled": true,
@@ -415,6 +427,9 @@
     "gpu_fusion_enabled": true,
     "replay_lab_enabled": true,
     "game_state_fusion_enabled": true,
+    "killcam_binding_enabled": true,
+    "mesh_reputation_enabled": true,
+    "fleet_merge_policy": "merge",
     "fuse_weights": {
       "sentinel_likely": 0.35,
       "vps_probe": 0.40,
@@ -425,7 +440,8 @@
       "repeat_offender": 0.20,
       "game_kick": 0.35,
       "game_cheat_event": 0.12,
-      "game_player_flag": 0.08
+      "game_player_flag": 0.08,
+      "mesh_cluster": 0.28
     }
   },
   "custom_hooks": []

@@ -17,7 +17,7 @@ from typing import Any
 
 from . import ids, peer_blocklist, policies, sentinel
 from . import ai_learning, autopilot_audit, negative_allowlist, playability, reputation_graph
-from . import adaptive_posture, pre_burst_forecast, game_state_fusion
+from . import adaptive_posture, pre_burst_forecast, game_state_fusion, mesh_reputation, killcam_binding
 
 STATE_FILE = Path("/var/lib/array-firewall/ai-ops.json")
 LOG_FILE = Path("/var/lib/array-firewall/ai-ops-log.jsonl")
@@ -58,6 +58,7 @@ def _cfg() -> dict[str, Any]:
             "game_kick": 0.35,
             "game_cheat_event": 0.12,
             "game_player_flag": 0.08,
+            "mesh_cluster": 0.28,
         },
         "pre_burst_identical_min": 6,
         "pre_burst_identical_max": 19,
@@ -226,6 +227,9 @@ def _fuse_context(*, sentinel_payload: dict[str, Any] | None = None) -> dict[str
         rep = reputation_graph.score(ip)
         if rep >= 0.2:
             bump(ip, rep * float(weights.get("reputation_bad", 0.35)), f"reputation:{rep}")
+        mesh = mesh_reputation.mesh_score(ip)
+        if mesh >= 0.35:
+            bump(ip, mesh * float(weights.get("mesh_cluster", 0.28)), f"mesh:{mesh}")
         if negative_allowlist.is_negative(ip):
             bump(ip, 0.25, "negative_allowlist")
 
@@ -356,6 +360,15 @@ def _fuse_context(*, sentinel_payload: dict[str, Any] | None = None) -> dict[str
 
     if cfg.get("game_state_fusion_enabled", True):
         game_state_fusion.fuse(ctx, payload, bump=bump, weights=weights)
+    if cfg.get("killcam_binding_enabled", True):
+        killcam_binding.apply_to_context(ctx, payload, bump=bump)
+
+    peer_rows_mesh = _extract_peer_rows(payload)
+    if peer_rows_mesh and cfg.get("mesh_reputation_enabled", True):
+        mesh = mesh_reputation.analyze_peers(peer_rows_mesh, session_hex=str(ctx.get("session_hex") or ""))
+        ctx["mesh_reputation"] = mesh
+        if mesh.get("clique_count", 0) >= 1:
+            ctx["signals"].append(f"mesh_cliques:{mesh.get('clique_count')}")
 
     ctx["candidates"] = dict(
         sorted(scores.items(), key=lambda kv: kv[1]["score"], reverse=True)[:32]
@@ -924,7 +937,8 @@ def tick(
             fleet_result = fb.export_bundle()
             pull = cfg.get("fleet_pull_url")
             if pull:
-                fleet_result["pull"] = fb.pull_from_url(str(pull))
+                merge = str(cfg.get("fleet_merge_policy") or "merge")
+                fleet_result["pull"] = fb.scheduled_pull(str(pull), merge_policy=merge)
             state["last_fleet_sync_ts"] = now
         except Exception as exc:
             fleet_result = {"ok": False, "error": str(exc)}
@@ -1078,6 +1092,7 @@ def status() -> dict[str, Any]:
         "adaptive_posture": state.get("last_adaptive_posture"),
         "pre_burst_forecast": state.get("last_pre_burst_forecast"),
         "game_fusion": state.get("last_game_fusion"),
+        "mesh_reputation": mesh_reputation.status(),
         "learning": ai_learning.status(),
         "reputation": reputation_graph.status(),
         "timeline": autopilot_audit.status(),
