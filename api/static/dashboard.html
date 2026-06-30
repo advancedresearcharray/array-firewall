@@ -2078,7 +2078,13 @@
         headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(opts.headers || {}) },
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || res.statusText);
+      if (!res.ok) {
+        if (res.status === 403) {
+          const ip = data.clientIp ? ` (your IP: ${data.clientIp})` : '';
+          throw new Error(data.detail || `API blocked from this network${ip} — use LAN/mgmt subnet or paste token after connecting from an allowed network`);
+        }
+        throw new Error(data.error || res.statusText);
+      }
       return data;
     }
 
@@ -3359,9 +3365,12 @@
     async function refreshPublicOverview() {
       try {
         const res = await fetch('/api/v1/firewall/status');
-        const status = await res.json();
+        const status = await res.json().catch(() => ({}));
         if (!res.ok) {
-          if (res.status === 403) showConnectHint('Dashboard blocked from this network — connect from 192.0.2.x or 203.0.113.x');
+          if (res.status === 403) {
+            const ip = status.clientIp ? ` Your IP: ${status.clientIp}.` : '';
+            showConnectHint(`Dashboard blocked from this network.${ip} Connect from your LAN/mgmt subnet, then paste API token below.`);
+          }
           return;
         }
         applyFirewallStatus(status);
