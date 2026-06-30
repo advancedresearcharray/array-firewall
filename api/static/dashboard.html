@@ -1291,6 +1291,42 @@
       <section class="section panel">
         <div class="section-head">
           <div>
+            <h2>AI Autopilot</h2>
+            <p>Fuses Sentinel · QCE · ASVI · RQD · IDS/Ollama into automatic shield, block, and investigate actions</p>
+          </div>
+          <div class="section-actions">
+            <select id="aiOpsModeSelect" class="sm" style="margin-right:.5rem">
+              <option value="observe">Observe</option>
+              <option value="assist">Assist</option>
+              <option value="enforce">Enforce</option>
+            </select>
+            <button class="sm" id="aiOpsModeSave">Set mode</button>
+            <button class="primary sm" id="aiOpsTick">Tick now</button>
+          </div>
+        </div>
+        <div class="stat-grid" style="margin-bottom:1rem">
+          <div class="stat"><label>Mode</label><div class="value" id="aiOpsMode">—</div></div>
+          <div class="stat"><label>Fused verdict</label><div class="value" id="aiOpsVerdict">—</div></div>
+          <div class="stat"><label>Last tick</label><div class="value mono" id="aiOpsLastTick">—</div></div>
+          <div class="stat"><label>Planned</label><div class="value" id="aiOpsPlanned">—</div></div>
+          <div class="stat"><label>Executed</label><div class="value" id="aiOpsExecuted">—</div></div>
+          <div class="stat"><label>Ollama planner</label><div class="value" id="aiOpsOllama">—</div></div>
+          <div class="stat"><label>Tiny-safe</label><div class="value" id="aiOpsTiny">—</div></div>
+        </div>
+        <div class="hint-box" id="aiOpsSummary">Autopilot runs every 30s and on each Sentinel mitigate callback.</div>
+        <div class="table-wrap" style="margin-top:1rem">
+          <table>
+            <thead><tr><th>IP</th><th>Score</th><th>Reasons</th></tr></thead>
+            <tbody id="aiOpsCandidates">
+              <tr><td colspan="3" class="sub">Waiting for first fusion tick…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section panel" style="margin-top:1rem">
+        <div class="section-head">
+          <div>
             <h2>AI intrusion detection</h2>
             <p>NIST-aligned monitoring · enforce modes: log / alert / block / quarantine</p>
           </div>
@@ -2992,7 +3028,45 @@
       } catch (e) { /* optional until deployed */ }
     }
 
+    async function refreshAiOps() {
+      if (!$('aiOpsMode')) return;
+      try {
+        const s = await api('/api/v1/ai-ops/status');
+        const mode = s.mode || 'assist';
+        const modeCls = mode === 'observe' ? 'warn' : (mode === 'enforce' ? 'bad' : 'ok');
+        $('aiOpsMode').innerHTML = `<span class="badge ${modeCls}">${mode}</span>`;
+        if ($('aiOpsModeSelect')) $('aiOpsModeSelect').value = mode;
+        const st = s.state || {};
+        const verdict = st.last_verdict || '—';
+        const vCls = verdict === 'hostile' ? 'bad' : (verdict === 'suspicious' ? 'warn' : 'ok');
+        $('aiOpsVerdict').innerHTML = verdict === '—' ? '—' : `<span class="badge ${vCls}">${verdict}</span>`;
+        $('aiOpsLastTick').textContent = st.last_tick_ts
+          ? new Date(st.last_tick_ts * 1000).toLocaleTimeString()
+          : '—';
+        $('aiOpsPlanned').textContent = st.last_planned != null ? String(st.last_planned) : '—';
+        const execN = Array.isArray(st.last_executed) ? st.last_executed.length : 0;
+        $('aiOpsExecuted').textContent = String(execN);
+        $('aiOpsOllama').innerHTML = s.ollama_planner
+          ? '<span class="badge ok">on</span>' : '<span class="badge warn">off</span>';
+        $('aiOpsTiny').innerHTML = s.tiny_packet_only
+          ? '<span class="badge warn">shield-only</span>' : '<span class="badge ok">full</span>';
+        $('aiOpsSummary').textContent = st.last_summary
+          || `Thresholds — shield ${s.thresholds?.shield} · block ${s.thresholds?.block} · subnet ${s.thresholds?.subnet}`;
+        const cands = st.top_candidates || [];
+        $('aiOpsCandidates').innerHTML = cands.length
+          ? cands.map(c => `<tr>
+              <td class="mono">${c.ip || '—'}</td>
+              <td>${c.score != null ? Number(c.score).toFixed(2) : '—'}</td>
+              <td class="sub">${(c.reasons || []).slice(0, 3).join(' · ') || '—'}</td>
+            </tr>`).join('')
+          : '<tr><td colspan="3" class="sub">No fusion candidates yet.</td></tr>';
+      } catch (e) {
+        if ($('aiOpsSummary')) $('aiOpsSummary').textContent = 'AI Autopilot unavailable — ' + e.message;
+      }
+    }
+
     async function refreshSecurity() {
+      await refreshAiOps();
       if (!$('idsMode')) return;
       try {
         const s = await api('/api/v1/ids/summary');
@@ -3340,6 +3414,20 @@
       try {
         $('idsAiSummary').textContent = 'Scanning flows…';
         await api('/api/v1/ids/scan', { method: 'POST', body: '{}' });
+        await refreshSecurity();
+      } catch (e) { showError(e.message); }
+    });
+    on('aiOpsTick', async () => {
+      try {
+        if ($('aiOpsSummary')) $('aiOpsSummary').textContent = 'Running fusion tick…';
+        await api('/api/v1/ai-ops/tick', { method: 'POST', body: JSON.stringify({ force: true, source: 'dashboard' }) });
+        await refreshSecurity();
+      } catch (e) { showError(e.message); }
+    });
+    on('aiOpsModeSave', async () => {
+      try {
+        const mode = ($('aiOpsModeSelect') || {}).value || 'assist';
+        await api('/api/v1/ai-ops/mode', { method: 'POST', body: JSON.stringify({ mode }) });
         await refreshSecurity();
       } catch (e) { showError(e.message); }
     });

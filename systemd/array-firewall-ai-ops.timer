@@ -1,0 +1,10 @@
+[Unit]
+Description=AI Autopilot fusion cycle every 30 seconds
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=30s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -470,4 +470,20 @@ def mitigate(payload: dict[str, Any]) -> dict[str, Any]:
     except Exception as exc:
         result["wan_nat"] = {"ok": False, "error": str(exc)}
 
+    try:
+        from . import ai_ops
+
+        ai_tick = ai_ops.tick(sentinel_payload=payload, source="mitigate", force=False)
+        result["ai_ops"] = {
+            "verdict": (ai_tick.get("plan") or {}).get("verdict"),
+            "summary": (ai_tick.get("plan") or {}).get("summary"),
+            "executed": len((ai_tick.get("execution") or {}).get("executed") or []),
+            "mode": ai_tick.get("mode"),
+            "skipped": ai_tick.get("skipped"),
+        }
+        if ai_tick.get("execution", {}).get("executed"):
+            result["actions"].append(f"ai_ops:{len(ai_tick['execution']['executed'])}")
+    except Exception as exc:
+        result["ai_ops"] = {"ok": False, "error": str(exc)}
+
     return result

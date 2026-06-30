@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.auth import check_bearer, check_token, ip_allowed, token_configured
-from lib import cutover, devices, dhcp, dns_filter, folding, gaming, gaming_mitigate, groups, ids, information_flow, lobby_intel, nat, nft, pattern_encode, peer_blocklist, perf, policies, qce, qos, rqd, asvi, sentinel, stability, subnet_blocklist, telemetry, throughput_fold, zones, arp_watch, afld, wan_scan_block
+from lib import cutover, devices, dhcp, dns_filter, folding, gaming, gaming_mitigate, groups, ids, information_flow, lobby_intel, nat, nft, pattern_encode, peer_blocklist, perf, policies, qce, qos, rqd, asvi, ai_ops, sentinel, stability, subnet_blocklist, telemetry, throughput_fold, zones, arp_watch, afld, wan_scan_block
 from lib import abuse_report, conn_lite_db, probe_sink, unknown_investigator
 
 PORT = int(os.environ.get("ARRAY_FW_API_PORT", "8090"))
@@ -456,6 +456,14 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/v1/ids/nist":
             json_response(self, 200, ids.nist_catalog())
             return
+        if path == "/api/v1/ai-ops/status":
+            json_response(self, 200, ai_ops.status())
+            return
+        if path == "/api/v1/ai-ops/log":
+            _path_only, qs = self._path()
+            limit = int((qs.get("limit") or ["20"])[0])
+            json_response(self, 200, {"ok": True, "entries": ai_ops.recent_log(limit=limit)})
+            return
         if path == "/api/v1/dns/status":
             json_response(self, 200, dns_filter.status())
             return
@@ -633,6 +641,26 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/v1/ids/clear-blocks":
             try:
                 json_response(self, 200, ids.clear_enforcement())
+            except Exception as exc:  # noqa: BLE001
+                json_response(self, 500, {"ok": False, "error": str(exc)})
+            return
+
+        if path == "/api/v1/ai-ops/tick":
+            try:
+                force = bool(body.get("force"))
+                payload = body.get("sentinel_payload") if isinstance(body.get("sentinel_payload"), dict) else None
+                json_response(
+                    self,
+                    200,
+                    ai_ops.tick(force=force, sentinel_payload=payload, source=str(body.get("source") or "api")),
+                )
+            except Exception as exc:  # noqa: BLE001
+                json_response(self, 500, {"ok": False, "error": str(exc)})
+            return
+
+        if path == "/api/v1/ai-ops/mode":
+            try:
+                json_response(self, 200, ai_ops.set_mode(str(body.get("mode") or "assist")))
             except Exception as exc:  # noqa: BLE001
                 json_response(self, 500, {"ok": False, "error": str(exc)})
             return

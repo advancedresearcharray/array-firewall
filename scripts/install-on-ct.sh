@@ -99,19 +99,23 @@ install -m 0644 "$INSTALL_ROOT/systemd/array-firewall-arp-watch.service" /etc/sy
 install -m 0644 "$INSTALL_ROOT/systemd/array-firewall-wan-scan-capture.service" /etc/systemd/system/array-firewall-wan-scan-capture.service
 install -m 0644 "$INSTALL_ROOT/systemd/array-firewall-afld-rollup.service" /etc/systemd/system/array-firewall-afld-rollup.service
 install -m 0644 "$INSTALL_ROOT/systemd/array-firewall-afld-rollup.timer" /etc/systemd/system/array-firewall-afld-rollup.timer
+install -m 0644 "$INSTALL_ROOT/systemd/array-firewall-ai-ops.service" /etc/systemd/system/array-firewall-ai-ops.service
+install -m 0644 "$INSTALL_ROOT/systemd/array-firewall-ai-ops.timer" /etc/systemd/system/array-firewall-ai-ops.timer
 chmod +x "$INSTALL_ROOT/scripts/arp-watch.sh" 2>/dev/null || true
 chmod +x "$INSTALL_ROOT/scripts/wan-scan-capture.py" 2>/dev/null || true
 chmod +x "$INSTALL_ROOT/scripts/afld-rollup.py" 2>/dev/null || true
+chmod +x "$INSTALL_ROOT/scripts/ai-ops-tick.py" 2>/dev/null || true
 chmod +x "$INSTALL_ROOT/gaming-tools/probe-sink-listener.py" 2>/dev/null || true
 
 systemctl daemon-reload
-systemctl enable array-firewall.service array-firewall-api.service array-firewall-probe-sink.service array-firewall-arp-watch.service array-firewall-wan-scan-capture.service array-firewall-afld-rollup.timer
+systemctl enable array-firewall.service array-firewall-api.service array-firewall-probe-sink.service array-firewall-arp-watch.service array-firewall-wan-scan-capture.service array-firewall-afld-rollup.timer array-firewall-ai-ops.timer
 systemctl restart array-firewall.service
 systemctl restart array-firewall-api.service
 systemctl restart array-firewall-probe-sink.service 2>/dev/null || true
 systemctl restart array-firewall-arp-watch.service 2>/dev/null || true
 systemctl restart array-firewall-wan-scan-capture.service 2>/dev/null || true
 systemctl restart array-firewall-afld-rollup.timer 2>/dev/null || true
+systemctl restart array-firewall-ai-ops.timer 2>/dev/null || true
 
 "$INSTALL_ROOT/scripts/perf-tune.sh" apply 2>/dev/null || true
 

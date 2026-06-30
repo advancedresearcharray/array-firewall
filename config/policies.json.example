@@ -387,5 +387,29 @@
     "autorate_before_apply": false,
     "autorate_factor": 0.95
   },
+  "ai_ops": {
+    "enabled": true,
+    "mode": "assist",
+    "tick_interval_sec": 30,
+    "ollama_planner": true,
+    "auto_ids_scan": true,
+    "auto_buffer_on_spike": true,
+    "auto_ids_on_hostile": true,
+    "min_confidence_shield": 0.45,
+    "min_confidence_block": 0.72,
+    "min_confidence_subnet": 0.80,
+    "override_tiny_packet_only": false,
+    "max_blocks_per_tick": 8,
+    "max_subnets_per_tick": 2,
+    "fuse_weights": {
+      "sentinel_likely": 0.35,
+      "vps_probe": 0.40,
+      "identical_burst": 0.25,
+      "asvi_act": 0.30,
+      "qce_peak": 0.25,
+      "ids_ai_high": 0.30,
+      "repeat_offender": 0.20
+    }
+  },
   "custom_hooks": []
 }

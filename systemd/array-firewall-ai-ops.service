@@ -1,0 +1,9 @@
+[Unit]
+Description=Array Firewall AI Autopilot tick
+After=array-firewall-api.service
+Wants=array-firewall-api.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/array-firewall/scripts/ai-ops-tick.py
+Nice=10
