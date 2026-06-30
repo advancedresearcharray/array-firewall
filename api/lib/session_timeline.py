@@ -13,6 +13,7 @@ STATE_FILES = {
     "buffer": Path("/var/lib/array-firewall/buffer-tune.state"),
     "upload_boost": Path("/var/lib/array-firewall/upload-boost.state"),
     "download_boost": Path("/var/lib/array-firewall/download-boost.state"),
+    "subnet_block": Path("/var/lib/array-firewall/blocked_subnets.json"),
     "route_pref": Path("/var/lib/array-firewall/gaming-route.state"),
 }
 

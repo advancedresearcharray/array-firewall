@@ -1,0 +1,10 @@
+[Unit]
+Description=Weekly VPS provider subnet catalog refresh
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=7d
+Persistent=true
+
+[Install]
+WantedBy=timers.target

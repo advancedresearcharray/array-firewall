@@ -345,6 +345,22 @@ def mitigate(payload: dict[str, Any]) -> dict[str, Any]:
             )
             result["vps_peer_blocklist"] = vps_result
             result["actions"].append(f"vps_blocked:{vps_result.get('added', 0)}")
+            subnet_cfg = dict((policies.gaming().get("mitigation") or {}).get("subnet_block") or {})
+            if subnet_cfg.get("auto_block_on_vps_mesh", True):
+                try:
+                    from . import subnet_blocklist as sb
+
+                    subnet_result = sb.block_from_ips(
+                        vps_ips,
+                        reason="vultr_vps_game_peer",
+                        source="sentinel_mitigate",
+                    )
+                    result["subnet_blocklist"] = subnet_result
+                    result["actions"].append(
+                        f"subnet_blocked:{subnet_result.get('nft_applied', 0)}"
+                    )
+                except ImportError:
+                    pass
 
     if cfg.get("auto_block_peers", True) and peer_ips:
         peer_ips = [ip for ip in peer_ips if not peer_blocklist.in_game_allowlist(ip)]

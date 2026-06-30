@@ -1,0 +1,9 @@
+[Unit]
+Description=Refresh VPS provider subnet catalog for array-firewall
+After=network-online.target array-firewall-api.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=PYTHONPATH=/opt/array-firewall/api
+ExecStart=/usr/bin/python3 /opt/array-firewall/scripts/update-vps-subnet-blocklist.py

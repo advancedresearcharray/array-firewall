@@ -14,9 +14,11 @@ Exit codes:
 
 | Code | Meaning |
 |------|---------|
-| 0 | Within range (5–19 pushes today) |
+| 0 | Within range (5–19 counted pushes today) |
 | 1 | Below minimum — need more pushes |
 | 2 | At or over maximum — stop pushing |
+
+**Exempt pushes** (not counted toward min/max): repos in `daily_push_exempt_repos` (default: `array-firewall`, `warzone-lobby-sentinel`) and commits containing `[no-quota]` or `[infra-deploy]`.
 
 ## Fleet integration
 

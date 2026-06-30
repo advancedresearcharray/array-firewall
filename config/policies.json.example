@@ -278,6 +278,23 @@
         "ttl_sec": 86400,
         "block_on_first_probe": true
       },
+      "subnet_block": {
+        "enabled": true,
+        "default_ttl_days": 30,
+        "prefix_len": 24,
+        "auto_block_on_vps_mesh": true,
+        "auto_block_vps_mesh_subnet": true,
+        "enforce_provider_ranges": false,
+        "provider_ttl_days": 365,
+        "provider_refresh_hours": 168,
+        "max_active_subnets": 512,
+        "providers": {
+          "vultr": "https://cloud-ip-ranges.com/download/vultr.txt",
+          "linode": "https://cloud-ip-ranges.com/download/linode.txt",
+          "digitalocean": "https://cloud-ip-ranges.com/download/digitalocean.txt",
+          "hetzner": "https://cloud-ip-ranges.com/download/hetzner.txt"
+        }
+      },
       "probe_block_ttl_sec": 86400,
       "tcp_rst_non_game": true,
       "auto_route_pref_in_match": true

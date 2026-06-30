@@ -193,6 +193,24 @@ PY
   fi
 }
 
+setup_blocked_subnets() {
+  nft add set "$TABLE" blocked_subnets '{ type ipv4_addr; flags interval, timeout; size 65536; }'
+  nft add counter "$TABLE" subnet_block
+  local elems=""
+  if command -v python3 >/dev/null 2>&1; then
+    elems="$(python3 - <<'PY'
+import sys
+sys.path.insert(0, "/opt/array-firewall/api")
+from lib import subnet_blocklist
+print(subnet_blocklist.render_nft_elements())
+PY
+)"
+  fi
+  if [[ -n "$elems" ]]; then
+    nft add element "$TABLE" blocked_subnets "{ $elems }" 2>/dev/null || true
+  fi
+}
+
 cmd_shield() {
   need_root
   require_xbox
@@ -200,15 +218,16 @@ cmd_shield() {
   local level="${1:-normal}"
   shift || true
 
-  if sentinel_tiny_only; then
+    if sentinel_tiny_only; then
     level="normal"
     set --
     if [[ -f "$STATE" ]] && grep -q '^mode=shield$' "$STATE" && grep -q '^level=normal$' "$STATE"; then
-      if nft list set "$TABLE" wan_scanners >/dev/null 2>&1; then
+      if nft list set "$TABLE" wan_scanners >/dev/null 2>&1 \
+        && nft list set "$TABLE" blocked_subnets >/dev/null 2>&1; then
         log "SHIELD (normal/tiny-only) already active — skip rebuild"
         return 0
       fi
-      log "SHIELD active but wan_scanners missing — rebuilding"
+      log "SHIELD active but wan_scanners/blocked_subnets missing — rebuilding"
     fi
   fi
 
@@ -306,8 +325,11 @@ PY
 
   nft add rule "$TABLE" xbox_in ct state established,related accept
   setup_wan_scanner_block
+  setup_blocked_subnets
   nft add rule "$TABLE" xbox_in ip saddr @wan_scanners counter name wan_scanner_block drop \
     comment '"wan-scanner-block"'
+  nft add rule "$TABLE" xbox_in ip saddr @blocked_subnets counter name subnet_block drop \
+    comment '"auto-blocked-subnet"'
   # Full WAN DMZ DNAT marks every inbound scan as dnat — do not blanket-accept those.
   if [[ "$xbox_dmz" != "1" ]]; then
     nft add rule "$TABLE" xbox_in ct status dnat accept comment '"wan port-forward"'

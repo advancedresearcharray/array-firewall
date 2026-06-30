@@ -1645,6 +1645,23 @@
             <tbody id="goPeerBody"><tr><td colspan="6" class="sub">Loading…</td></tr></tbody></table>
           </div>
         </section>
+        <section class="section panel" style="margin-top:1rem">
+          <div class="section-head"><div><h2>Subnet blocklist</h2><p>Auto /24 blocks from VPS probe mesh — nft <code>blocked_subnets</code> interval set (works with DMZ).</p></div>
+            <div class="section-actions"><button class="sm" id="goSubnetRefresh">Refresh</button><button class="sm" id="goSubnetProviders">Update provider catalog</button></div>
+          </div>
+          <div class="form-row">
+            <label>Block IP (→ /24) <input type="text" id="goSubnetIp" placeholder="96.30.204.149" style="width:10rem"></label>
+            <label>Or CIDR <input type="text" id="goSubnetCidr" placeholder="96.30.0.0/16" style="width:10rem"></label>
+            <button class="primary sm" id="goSubnetBlock">Block subnet</button>
+            <button class="sm" id="goSubnetApply">Re-apply nft</button>
+            <span class="sub" id="goSubnetCount">0 active</span>
+          </div>
+          <div class="table-wrap">
+            <table><thead><tr><th>CIDR</th><th>Tier</th><th>Reason</th><th>Source</th><th>Hits</th><th>Expires</th></tr></thead>
+            <tbody id="goSubnetBody"><tr><td colspan="6" class="sub">Loading…</td></tr></tbody></table>
+          </div>
+          <p class="sub mono" id="goSubnetCatalog" style="margin-top:.5rem;font-size:.72rem">—</p>
+        </section>
       </div>
 
       <div class="subpanel" id="go-panel-intel">

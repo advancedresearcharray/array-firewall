@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.auth import check_bearer, check_token, ip_allowed, token_configured
-from lib import cutover, devices, dhcp, dns_filter, folding, gaming, gaming_mitigate, groups, ids, information_flow, lobby_intel, nat, nft, pattern_encode, peer_blocklist, perf, policies, qce, qos, rqd, asvi, sentinel, stability, telemetry, throughput_fold, zones, arp_watch, afld, wan_scan_block
+from lib import cutover, devices, dhcp, dns_filter, folding, gaming, gaming_mitigate, groups, ids, information_flow, lobby_intel, nat, nft, pattern_encode, peer_blocklist, perf, policies, qce, qos, rqd, asvi, sentinel, stability, subnet_blocklist, telemetry, throughput_fold, zones, arp_watch, afld, wan_scan_block
 from lib import abuse_report, conn_lite_db, probe_sink, unknown_investigator
 
 PORT = int(os.environ.get("ARRAY_FW_API_PORT", "8090"))
@@ -255,6 +255,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/v1/wan-scanners":
             json_response(self, 200, wan_scan_block.status())
+            return
+        if path == "/api/v1/subnets":
+            json_response(self, 200, subnet_blocklist.status())
             return
         if path == "/api/v1/wan-scans":
             hours = float((qs.get("hours") or ["24"])[0])
@@ -694,6 +697,61 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/v1/gaming/peers/decay":
             try:
                 json_response(self, 200, peer_blocklist.decay_stale())
+            except Exception as exc:  # noqa: BLE001
+                json_response(self, 500, {"ok": False, "error": str(exc)})
+            return
+
+        if path == "/api/v1/subnets/block":
+            try:
+                ips = list(body.get("ips") or [])
+                cidrs = list(body.get("cidrs") or [])
+                reason = str(body.get("reason") or "api")
+                ttl_days = body.get("ttl_days")
+                results: list[dict[str, Any]] = []
+                for cidr in cidrs:
+                    results.append(
+                        subnet_blocklist.add_subnet(
+                            str(cidr),
+                            reason=reason,
+                            tier=str(body.get("tier") or "manual"),
+                            source="api",
+                            ttl_days=int(ttl_days) if ttl_days is not None else None,
+                        )
+                    )
+                if ips:
+                    results.append(
+                        subnet_blocklist.block_from_ips(
+                            [str(i) for i in ips],
+                            reason=reason,
+                            source="api",
+                        )
+                    )
+                json_response(self, 200, {"ok": True, "results": results})
+            except Exception as exc:  # noqa: BLE001
+                json_response(self, 500, {"ok": False, "error": str(exc)})
+            return
+
+        if path == "/api/v1/subnets/remove":
+            try:
+                removed = [
+                    subnet_blocklist.remove_subnet(str(c))
+                    for c in list(body.get("cidrs") or [])
+                ]
+                json_response(self, 200, {"ok": True, "removed": removed})
+            except Exception as exc:  # noqa: BLE001
+                json_response(self, 500, {"ok": False, "error": str(exc)})
+            return
+
+        if path == "/api/v1/subnets/apply":
+            try:
+                json_response(self, 200, subnet_blocklist.apply_all())
+            except Exception as exc:  # noqa: BLE001
+                json_response(self, 500, {"ok": False, "error": str(exc)})
+            return
+
+        if path == "/api/v1/subnets/refresh-providers":
+            try:
+                json_response(self, 200, subnet_blocklist.refresh_providers())
             except Exception as exc:  # noqa: BLE001
                 json_response(self, 500, {"ok": False, "error": str(exc)})
             return

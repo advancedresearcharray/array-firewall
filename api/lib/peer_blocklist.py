@@ -177,6 +177,13 @@ def add_peers(
             wsb.block_scanner(ip, reason=reason, ttl_sec=ttl)
         except ImportError:
             pass
+        if "vps" in reason.lower():
+            try:
+                from . import subnet_blocklist as sb
+
+                sb.block_from_ip(ip, reason=reason, source="peer_blocklist")
+            except ImportError:
+                pass
 
     if len(peers) > max_peers:
         ranked = sorted(

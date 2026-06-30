@@ -203,6 +203,33 @@
     }
   }
 
+  async function refreshSubnets() {
+    if (!$('goSubnetBody')) return;
+    try {
+      const r = await api('/api/v1/subnets');
+      const rows = r.active || [];
+      const body = $('goSubnetBody');
+      if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="6" class="sub">No blocked subnets</td></tr>';
+      } else {
+        body.innerHTML = rows.map(s => `<tr>
+          <td class="mono">${esc(s.cidr || '—')}</td>
+          <td>${esc(s.tier || '—')}</td>
+          <td>${esc(s.reason || '—')}</td>
+          <td>${esc(s.source || '—')}</td>
+          <td>${s.hits ?? '—'}</td>
+          <td class="mono">${esc(String(s.expires || '—').slice(0, 19))}</td>
+        </tr>`).join('');
+      }
+      setText('goSubnetCount', `${r.active_count ?? rows.length} active`);
+      const cat = r.provider_catalog || {};
+      const catParts = Object.entries(cat).map(([k, v]) => `${k}:${v}`).join(' · ');
+      setText('goSubnetCatalog', catParts ? `Provider catalog: ${catParts}` : 'Provider catalog: not fetched yet');
+    } catch (e) {
+      setHtml('goSubnetBody', `<tr><td colspan="6" class="sub">${esc(e.message)}</td></tr>`);
+    }
+  }
+
   async function refreshProbeSink() {
     if (!$('goProbeBody')) return;
     try {
@@ -419,6 +446,7 @@
       refreshDefenses(),
       refreshConnections(),
       refreshPeers(),
+      refreshSubnets(),
       refreshProbeSink(),
       refreshLobbyIntel(),
       refreshZones(),
@@ -559,6 +587,33 @@
       await api('/api/v1/gaming/peers/decay', { method: 'POST', body: '{}' });
       toast('Expired peers decayed');
       await refreshPeers();
+    });
+
+    on('goSubnetRefresh', () => refreshSubnets());
+    on('goSubnetBlock', async () => {
+      const ip = ($('goSubnetIp') || {}).value.trim();
+      const cidr = ($('goSubnetCidr') || {}).value.trim();
+      const body = { reason: 'dashboard' };
+      if (cidr) body.cidrs = [cidr];
+      else if (ip) body.ips = [ip];
+      else { showError('Enter IP or CIDR'); return; }
+      await api('/api/v1/subnets/block', { method: 'POST', body: JSON.stringify(body) });
+      toast('Subnet block queued');
+      if ($('goSubnetIp')) $('goSubnetIp').value = '';
+      if ($('goSubnetCidr')) $('goSubnetCidr').value = '';
+      await refreshSubnets();
+    });
+    on('goSubnetApply', async () => {
+      await api('/api/v1/subnets/apply', { method: 'POST', body: '{}' });
+      toast('Subnet nft rules re-applied');
+      await refreshSubnets();
+    });
+    on('goSubnetProviders', async () => {
+      try {
+        const r = await api('/api/v1/subnets/refresh-providers', { method: 'POST', body: '{}' });
+        toast(`Provider catalog updated (${r.cidr_count ?? '?'} CIDRs)`);
+        await refreshSubnets();
+      } catch (e) { showError(e.message); }
     });
 
     on('goProbeRefresh', () => refreshProbeSink());
@@ -784,6 +839,7 @@
     refreshDefenses,
     refreshConnections,
     refreshPeers,
+    refreshSubnets,
     refreshCutoverStatus,
     refreshSentinelEmbed,
     refreshInnovation,
