@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Install GPU packet analyzer on fleet GPU host (192.168.167.221).
+# Install GPU packet analyzer on fleet GPU host (192.0.2.221).
 set -euo pipefail
 
-HOST="${GPU_HOST:-192.168.167.221}"
+HOST="${GPU_HOST:-192.0.2.221}"
 USER="${GPU_USER:-ck}"
 REMOTE_ROOT="\${HOME}/opt/array-firewall-gpu"
 PORT="${GPU_PERF_PORT:-8795}"

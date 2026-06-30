@@ -1,4 +1,4 @@
-"""Zenodo dimensional folding stack for array-firewall (CT940).
+"""Zenodo dimensional folding stack for array-firewall (array-firewall CT).
 
 Maps papers to operational lanes — see docs/ZENODO-FOLDING.md:
 - 18728103 CPU/memory/storage/network filter lanes + BLSB

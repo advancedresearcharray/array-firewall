@@ -3,8 +3,8 @@
 set -euo pipefail
 
 OUT="${1:-/var/lib/array-firewall/probed-hostnames.json}"
-PROXMOX_NODES="${ARRAY_FW_PROXMOX_NODES:-192.168.167.9 192.168.167.39 192.168.167.53}"
-MDNS_NODE="${ARRAY_FW_MDNS_NODE:-192.168.167.9}"
+PROXMOX_NODES="${ARRAY_FW_PROXMOX_NODES:-}"
+MDNS_NODE="${ARRAY_FW_MDNS_NODE:-}"
 TMP="$(mktemp)"
 ROWS="$TMP.rows"
 
@@ -29,12 +29,12 @@ rows = []
 for path in sorted(glob.glob("/etc/pve/lxc/*.conf")):
     text = open(path, encoding="utf-8").read()
     mac = re.search(r"hwaddr=([0-9A-F:]+)", text, re.I)
-    ipm = re.search(r"ip=192\.168\.167\.(\d+)", text)
+    ipm = re.search(r"ip=([0-9.]+)", text)
     hn = re.search(r"^hostname:\s*(\S+)", text, re.M)
     vmid = path.split("/")[-1].split(".")[0]
     if not mac:
         continue
-    ip = f"192.168.167.{ipm.group(1)}" if ipm else ""
+    ip = ipm.group(1) if ipm else ""
     hostname = clean(hn.group(1) if hn else "")
     if vmid.isdigit():
         try:
@@ -48,11 +48,11 @@ for path in sorted(glob.glob("/etc/pve/lxc/*.conf")):
 for path in sorted(glob.glob("/etc/pve/qemu-server/*.conf")):
     text = open(path, encoding="utf-8").read()
     mac = re.search(r"hwaddr=([0-9A-F:]+)", text, re.I)
-    ipm = re.search(r"ip=192\.168\.167\.(\d+)", text)
+    ipm = re.search(r"ip=([0-9.]+)", text)
     name = re.search(r"^name:\s*(\S+)", text, re.M)
     if not mac:
         continue
-    ip = f"192.168.167.{ipm.group(1)}" if ipm else ""
+    ip = ipm.group(1) if ipm else ""
     hostname = clean(name.group(1) if name else "")
     if hostname:
         rows.append({"mac": mac.group(1).lower(), "ip": ip, "hostname": hostname, "source": "proxmox-vm"})
@@ -64,14 +64,12 @@ print(json.dumps(rows))
 PY
 done
 
-# Hypervisor MACs (authoritative)
-{
-  echo '{"mac":"c8:7f:54:03:51:43","ip":"192.168.167.9","hostname":"node9","source":"proxmox-host"}'
-  echo '{"mac":"50:eb:f6:cd:86:ec","ip":"192.168.167.39","hostname":"thirtynince","source":"proxmox-host"}'
-  echo '{"mac":"d4:3d:7e:be:e9:7a","ip":"192.168.167.53","hostname":"opencase","source":"proxmox-host"}'
-} >>"$ROWS"
+# Optional hypervisor rows: export ARRAY_FW_HYPERVISOR_JSON='[{"mac":"...","ip":"...","hostname":"..."}]'
+if [[ -n "${ARRAY_FW_HYPERVISOR_JSON:-}" ]]; then
+  python3 -c 'import json,sys; [print(json.dumps(r)) for r in json.loads(sys.argv[1])]' "$ARRAY_FW_HYPERVISOR_JSON" >>"$ROWS"
+fi
 
-# mDNS from node9 for IPs currently showing as labels in device store
+# mDNS for devices missing hostnames (requires ARRAY_FW_MDNS_NODE)
 if [[ -f /var/lib/array-firewall/devices.json ]]; then
   python3 - /var/lib/array-firewall/devices.json >>"$ROWS" <<'PY'
 import json, subprocess, sys
@@ -81,7 +79,7 @@ for dev in data.get("devices", {}).values():
     ip = str(dev.get("ip") or "")
     label = str(dev.get("label") or "")
     host = str(dev.get("hostname") or "")
-    if ip.startswith("192.168.167.") and (not host or label == ip):
+    if "." in ip and (not host or label == ip):
         ips.add(ip)
 for ip in sorted(ips):
     print(ip)
@@ -99,7 +97,7 @@ for dev in data.get("devices", {}).values():
     ip = str(dev.get("ip") or "")
     label = str(dev.get("label") or "")
     host = str(dev.get("hostname") or "")
-    if ip.startswith("192.168.167.") and (not host or label == ip):
+    if "." in ip and (not host or label == ip):
         print(ip)
 PY
 ) >>"$ROWS"

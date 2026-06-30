@@ -25,7 +25,7 @@ Exit codes:
 Canonical tooling lives in the private `array-gh-inbox-fleet` repo:
 
 - `bin/gh-push-quota` — full checker with config file support
-- `gh-inbox quota` / `gh-inbox doctor` — CT933 inbox agent hooks
+- `gh-inbox quota` / `gh-inbox doctor` — fleet ops inbox agent hooks
 
 Config keys: `daily_push_min`, `daily_push_max`, `daily_push_limit_timezone`.
 

@@ -27,16 +27,16 @@ if p.is_file():
 
 gaming = pol.get("gaming") or {}
 net = pol.get("network") or {}
-mac = (gaming.get("xbox_mac") or conf.get("XBOX_MAC") or "28:ea:0b:75:3b:75").lower()
+mac = (gaming.get("xbox_mac") or conf.get("XBOX_MAC") or "aa:bb:cc:dd:ee:ff").lower()
 lan = net.get("lan_if") or conf.get("LAN_IF") or conf.get("MGMT_IF") or "eth0"
-gw = net.get("gateway_ip") or conf.get("LAN_GATEWAY_IP") or "192.168.5.1"
+gw = net.get("gateway_ip") or conf.get("LAN_GATEWAY_IP") or "203.0.113.1"
 print(mac, lan, gw)
 PY
 )"
 
 WATCH_MAC="${WATCH_MAC,,}"
 LAN_IF="${LAN_IF:-eth0}"
-GW_IP="${GW_IP:-192.168.5.1}"
+GW_IP="${GW_IP:-203.0.113.1}"
 
 mkdir -p "$(dirname "$LOG")"
 
@@ -79,7 +79,7 @@ fi
 # Background tcpdump for ARP involving Xbox or gateway validation traffic.
 if command -v tcpdump >/dev/null 2>&1; then
   tcpdump -i "$LAN_IF" -n -l -q -e \
-    "ether host ${WATCH_MAC} or (arp and (host ${GW_IP} or host 192.168.5.11))" 2>/dev/null |
+    "ether host ${WATCH_MAC} or (arp and (host ${GW_IP} or host 203.0.113.11))" 2>/dev/null |
     while read -r line; do
       log_event "tcpdump" "$line"
     done &

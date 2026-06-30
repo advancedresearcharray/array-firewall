@@ -8,7 +8,7 @@ CONF="/etc/array-firewall/array-firewall.conf"
 
 LAN="${LAN_IF:-eth0}"
 WAN="${WAN_IF:-eth1}"
-XBOX_IP="${XBOX_IP:-192.168.167.65}"
+XBOX_IP="${XBOX_IP:-192.0.2.65}"
 NFT="/var/lib/array-firewall/dscp-gaming.nft"
 STATE="/var/lib/array-firewall/dscp-gaming.state"
 

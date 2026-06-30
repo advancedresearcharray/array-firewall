@@ -77,9 +77,9 @@ def _ifaces() -> dict[str, str]:
             "mgmt_if": c.get("MGMT_IF", "eth0"),
             "lan_if": lan_if,
             "wan_if": wan_if,
-            "lan_cidr": pol.get("lan_cidr") or c.get("LAN_CIDR", "192.168.167.0/24"),
-            "mgmt_cidr": pol.get("mgmt_cidr") or c.get("MGMT_CIDR", "192.168.167.0/24"),
-            "gw_ip": pol.get("gateway_ip") or c.get("LAN_GATEWAY_IP", "192.168.167.1"),
+            "lan_cidr": pol.get("lan_cidr") or c.get("LAN_CIDR", "192.0.2.0/24"),
+            "mgmt_cidr": pol.get("mgmt_cidr") or c.get("MGMT_CIDR", "192.0.2.0/24"),
+            "gw_ip": pol.get("gateway_ip") or c.get("LAN_GATEWAY_IP", "192.0.2.1"),
         }
     # Lab bench: clients on eth1, uplink via eth0 to existing LAN
     return {
@@ -87,9 +87,9 @@ def _ifaces() -> dict[str, str]:
         "mgmt_if": c.get("MGMT_IF", "eth0"),
         "lan_if": c.get("LAN_IF", c.get("LAB_IF", "eth1")),
         "wan_if": c.get("UPLINK_IF", c.get("MGMT_IF", "eth0")),
-        "lan_cidr": c.get("LAN_CIDR", c.get("LAB_CIDR", "10.99.0.0/24")),
-        "mgmt_cidr": c.get("MGMT_CIDR", "192.168.167.0/24"),
-        "gw_ip": c.get("LAB_GATEWAY_IP", "10.99.0.1"),
+        "lan_cidr": c.get("LAN_CIDR", c.get("LAB_CIDR", "198.51.100.0/24")),
+        "mgmt_cidr": c.get("MGMT_CIDR", "192.0.2.0/24"),
+        "gw_ip": c.get("LAB_GATEWAY_IP", "198.51.100.1"),
     }
 
 
@@ -269,12 +269,12 @@ def render_ruleset(*, flowtable: bool = True) -> str:
         try:
             from . import zones as zones_mod
 
-            gw_ip = ifaces.get("gw_ip") or policies.network().get("gateway_ip") or c.get("LAN_GATEWAY_IP", "192.168.167.1")
+            gw_ip = ifaces.get("gw_ip") or policies.network().get("gateway_ip") or c.get("LAN_GATEWAY_IP", "192.0.2.1")
             zone_block, zone_forward = zones_mod.render_forward_zones(lan_if, gw_ip)
         except Exception:
-            gw_ip = ifaces.get("gw_ip") or policies.network().get("gateway_ip") or c.get("LAN_GATEWAY_IP", "192.168.167.1")
+            gw_ip = ifaces.get("gw_ip") or policies.network().get("gateway_ip") or c.get("LAN_GATEWAY_IP", "192.0.2.1")
     else:
-        gw_ip = ifaces.get("gw_ip") or policies.network().get("gateway_ip") or c.get("LAN_GATEWAY_IP", "192.168.167.3")
+        gw_ip = ifaces.get("gw_ip") or policies.network().get("gateway_ip") or c.get("LAN_GATEWAY_IP", "192.0.2.3")
 
     google_dhcp_block = ""
     google_dhcp_forward = ""
@@ -283,7 +283,7 @@ def render_ruleset(*, flowtable: bool = True) -> str:
         from . import zones as zones_mod
 
         zcfg = zones_mod.config()
-        google_ip = zcfg.get("google_router_ip") or "192.168.167.2"
+        google_ip = zcfg.get("google_router_ip") or "192.0.2.2"
         mesh_macs: list[str] = []
         pol = policies.load()
         for gid in ("google-mesh", "wireless-infra"):
@@ -312,7 +312,7 @@ def render_ruleset(*, flowtable: bool = True) -> str:
     iifname "{mgmt_if}" ip saddr {mgmt_cidr} tcp dport {{ 22, {api_port}, {sentinel_port} }} accept
     iifname "{mgmt_if}" ip saddr {mgmt_cidr} icmp type echo-request accept"""
     elif xbox_router and mgmt_cidr != lan_cidr:
-        # Same NIC (eth0): mgmt 192.168.167.x and Xbox 192.168.5.x — allow both to reach API/sentinel.
+        # Same NIC (eth0): mgmt 192.0.2.x and Xbox 203.0.113.x — allow both to reach API/sentinel.
         mgmt_input = f"""
     iifname "{lan_if}" ip saddr {mgmt_cidr} udp dport {{ 53, {api_port}, {sentinel_port} }} accept
     iifname "{lan_if}" ip saddr {mgmt_cidr} tcp dport {{ 22, {api_port}, {sentinel_port} }} accept

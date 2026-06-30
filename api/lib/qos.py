@@ -14,11 +14,15 @@ APPLY_SCRIPT = Path("/opt/array-firewall/scripts/apply-qos.sh")
 STATE = Path("/var/lib/array-firewall/qos.state")
 
 PROXMOX_OUI = "bc:24:11"
-PROXMOX_HOSTS = {"192.168.167.39", "192.168.167.221"}
 PROXMOX_NAME_RE = re.compile(
-    r"(proxmox|array-|pct|qemu|vm\d|ct\d|lxc|hypervisor|thirtynince)",
+    r"(proxmox|array-|pct|qemu|vm\d|ct\d|lxc|hypervisor|pve-)",
     re.I,
 )
+
+
+def _proxmox_host_ips() -> set[str]:
+    raw = os.environ.get("ARRAY_FW_PROXMOX_NODES", "")
+    return {ip.strip() for ip in raw.split(",") if ip.strip()}
 _IPV4_RE = re.compile(r"^\d{1,3}(?:\.\d{1,3}){3}$")
 
 
@@ -99,7 +103,7 @@ DEFAULT_QOS: dict[str, Any] = {
     "lan_if": "eth0",
     "wan_up": "1000mbit",
     "wan_down": "1000mbit",
-    "xbox_ip": "192.168.167.65",
+    "xbox_ip": "",
     "xbox_rate": "500mbit",
     "marks": {
         "xbox": 0x10,
@@ -183,7 +187,7 @@ def is_proxmox_host(mac: str, ip: str = "", hostname: str = "", label: str = "")
     text = f"{hostname} {label}".lower()
     if mac.startswith(PROXMOX_OUI):
         return True
-    if ip in PROXMOX_HOSTS:
+    if ip in _proxmox_host_ips():
         return True
     return bool(PROXMOX_NAME_RE.search(text))
 
@@ -338,8 +342,9 @@ def render_nft_mangle() -> str:
     laptop_ips = ips_for("laptop")
     phone_ips = ips_for("phone")
     other_ips = ips_for("other")
-    if _is_ipv4("192.168.167.39"):
-        other_ips.add("192.168.167.39")
+    for hv_ip in _proxmox_host_ips():
+        if _is_ipv4(hv_ip):
+            other_ips.add(hv_ip)
 
     def mark_rules(ips: set[str], mark_key: str) -> str:
         mk = marks.get(mark_key, marks.get("other", 0x30))

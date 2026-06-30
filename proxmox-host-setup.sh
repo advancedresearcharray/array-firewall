@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Provision array-firewall on Proxmox thirtynince (192.168.167.39)
-# Uses privileged LXC (VM 639 uses 32GB RAM — not enough headroom for another VM).
+# Provision array-firewall LXC on Proxmox (run on hypervisor host)
+# Uses privileged LXC for nftables/netfilter and low-level networking.
 set -euo pipefail
 
-CTID="${ARRAY_FW_CTID:-940}"
-VM_IP="${ARRAY_FW_IP:-192.168.167.241}"
-LAB_CIDR="${ARRAY_FW_LAB_IP:-10.99.0.1/24}"
-GW="${ARRAY_FW_GW:-192.168.167.1}"
+: "${ARRAY_FW_CTID:?Set ARRAY_FW_CTID}"
+CTID="${ARRAY_FW_CTID}"
+VM_IP="${ARRAY_FW_IP:-192.0.2.241}"
+LAB_CIDR="${ARRAY_FW_LAB_IP:-198.51.100.1/24}"
+GW="${ARRAY_FW_GW:-192.0.2.1}"
 SSH_PUB="${ARRAY_FW_SSH_PUB:-/root/.ssh/id_rsa.pub}"
 TEMPLATE="${ARRAY_FW_TEMPLATE:-/var/lib/vz/template/cache/debian-12-standard_12.12-1_amd64.tar.zst}"
 
@@ -16,7 +17,6 @@ if [[ ! -f "$SSH_PUB" ]]; then
 fi
 
 # vmbr1 → nic2 (Intel 1Gb WAN — separate from house LAN on nic0/vmbr0)
-# thirtynince ROG STRIX X570-E: nic0=Realtek 2.5G LAN, nic2=Intel I211 WAN, nic1=Aquantia spare
 if ! grep -q '^auto vmbr1' /etc/network/interfaces; then
   cat >> /etc/network/interfaces <<'EOF'
 
@@ -91,9 +91,9 @@ table inet filter {
     type filter hook input priority filter; policy drop;
     iif "lo" accept
     ct state established,related accept
-    ip saddr 192.168.167.0/24 tcp dport { 22, 8098 } accept
-    ip saddr 192.168.167.0/24 icmp type echo-request accept
-    ip saddr 10.99.0.0/24 icmp type echo-request accept
+    ip saddr 192.0.2.0/24 tcp dport { 22, 8098 } accept
+    ip saddr 192.0.2.0/24 icmp type echo-request accept
+    ip saddr 198.51.100.0/24 icmp type echo-request accept
   }
   chain forward {
     type filter hook forward priority filter; policy drop;
@@ -106,9 +106,9 @@ NFT
 
 mkdir -p /etc/array-firewall
 cat > /etc/array-firewall/README <<EOF
-array-firewall — Proxmox LXC on thirtynince (192.168.167.39)
-eth0 (${VM_IP}): LAN management + future API
-eth1 (10.99.0.1): second NIC via vmbr1/nic1 — no WAN yet
+array-firewall — Proxmox LXC (CT ${CTID})
+eth0 (${VM_IP}): LAN management + API
+eth1 (lab): secondary NIC via lab bridge — no WAN yet
 EOF
 
 sysctl -p /etc/sysctl.d/99-array-firewall.conf 2>/dev/null || true
@@ -122,6 +122,6 @@ pct exec "$CTID" -- bash -c 'hostname; ip -br addr; nft list chain inet filter i
 
 echo ""
 echo "array-firewall ready:"
-echo "  Proxmox: 192.168.167.39 (CT${CTID})"
-echo "  SSH:     root@${VM_IP}"
-echo "  Lab NIC: eth1 ${LAB_CIDR} on vmbr1 → nic1"
+echo "  Container: CT${CTID}"
+echo "  SSH:       root@${VM_IP}"
+echo "  Lab NIC:   eth1 ${LAB_CIDR}"

@@ -14,16 +14,18 @@ from . import devices
 PROBED_FILE = Path(os.environ.get("ARRAY_FW_PROBED_HOSTNAMES", "/var/lib/array-firewall/probed-hostnames.json"))
 PROXMOX_NODES = [
     ip.strip()
-    for ip in os.environ.get("ARRAY_FW_PROXMOX_NODES", "192.168.167.9,192.168.167.39,192.168.167.53").split(",")
+    for ip in os.environ.get("ARRAY_FW_PROXMOX_NODES", "").split(",")
     if ip.strip()
 ]
-MDNS_NODE = os.environ.get("ARRAY_FW_MDNS_NODE", "192.168.167.9")
+MDNS_NODE = os.environ.get("ARRAY_FW_MDNS_NODE", "").strip()
 
-HYPERVISORS: dict[str, dict[str, str]] = {
-    "192.168.167.9": {"hostname": "node9", "mac": "c8:7f:54:03:51:43"},
-    "192.168.167.39": {"hostname": "thirtynince", "mac": "50:eb:f6:cd:86:ec"},
-    "192.168.167.53": {"hostname": "opencase", "mac": "d4:3d:7e:be:e9:7a"},
-}
+HYPERVISORS: dict[str, dict[str, str]] = {}
+_hv_json = os.environ.get("ARRAY_FW_HYPERVISOR_MAP", "").strip()
+if _hv_json:
+    try:
+        HYPERVISORS = {str(k): dict(v) for k, v in json.loads(_hv_json).items()}
+    except (json.JSONDecodeError, TypeError, ValueError):
+        HYPERVISORS = {}
 
 _INVENTORY_PY = r"""
 import glob, json, re, subprocess, socket
@@ -38,12 +40,12 @@ rows = []
 for path in sorted(glob.glob("/etc/pve/lxc/*.conf")):
     text = open(path, encoding="utf-8").read()
     mac = re.search(r"hwaddr=([0-9A-F:]+)", text, re.I)
-    ipm = re.search(r"ip=192\.168\.167\.(\d+)", text)
+    ipm = re.search(r"ip=([0-9.]+)", text)
     hn = re.search(r"^hostname:\s*(\S+)", text, re.M)
     vmid = path.split("/")[-1].split(".")[0]
     if not mac:
         continue
-    ip = f"192.168.167.{ipm.group(1)}" if ipm else ""
+    ip = ipm.group(1) if ipm else ""
     hostname = clean(hn.group(1) if hn else "")
     if vmid.isdigit():
         try:
@@ -57,11 +59,11 @@ for path in sorted(glob.glob("/etc/pve/lxc/*.conf")):
 for path in sorted(glob.glob("/etc/pve/qemu-server/*.conf")):
     text = open(path, encoding="utf-8").read()
     mac = re.search(r"hwaddr=([0-9A-F:]+)", text, re.I)
-    ipm = re.search(r"ip=192\.168\.167\.(\d+)", text)
+    ipm = re.search(r"ip=([0-9.]+)", text)
     name = re.search(r"^name:\s*(\S+)", text, re.M)
     if not mac:
         continue
-    ip = f"192.168.167.{ipm.group(1)}" if ipm else ""
+    ip = ipm.group(1) if ipm else ""
     hostname = clean(name.group(1) if name else "")
     if hostname:
         rows.append({"mac": mac.group(1).lower(), "ip": ip, "hostname": hostname, "source": "proxmox-vm"})

@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Wire Zenodo folding into array-firewall CT940 (or any CTID).
-# Usage: ARRAY_FW_CTID=940 FOLD_RELAY_URL=http://192.168.167.39:19557 ./scripts/apply-folding-to-ct.sh
+# Wire Zenodo folding into array-firewall array-firewall CT (or any CTID).
+# Usage: ARRAY_FW_CTID=100 FOLD_RELAY_URL=http://192.0.2.254:19557 ./scripts/apply-folding-to-ct.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-CTID="${ARRAY_FW_CTID:-940}"
-PROX="${PROXMOX_NODE:-192.168.167.39}"
+: "${ARRAY_FW_CTID:?Set ARRAY_FW_CTID}"
+CTID="${ARRAY_FW_CTID}"
+PROX="${PROXMOX_NODE:?Set PROXMOX_NODE}"
 RELAY="${FOLD_RELAY_URL:-}"
 
 echo "[folding] Pushing folding.py + config to CT${CTID} via ${PROX}..."

@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Rollback gateway cutover → lab/sidecar mode on CT940.
+# Rollback gateway cutover → lab/sidecar mode on array-firewall CT.
 set -euo pipefail
 
-CTID="${ARRAY_FW_CTID:-940}"
-PROXMOX="${PROXMOX_NODE:-192.168.167.39}"
-RESTORE_IP="${ARRAY_FW_IP:-192.168.167.241}"
-LAB_CIDR="${ARRAY_FW_LAB_IP:-10.99.0.1/24}"
+: "${ARRAY_FW_CTID:?Set ARRAY_FW_CTID}"
+: "${PROXMOX_NODE:?Set PROXMOX_NODE}"
+CTID="${ARRAY_FW_CTID}"
+PROXMOX="${PROXMOX_NODE}"
+RESTORE_IP="${ARRAY_FW_IP:-192.0.2.241}"
+LAB_CIDR="${ARRAY_FW_LAB_IP:-198.51.100.1/24}"
 
 log() { printf '[rollback] %s\n' "$*"; }
 
@@ -19,7 +21,7 @@ fi
 
 # Try SSH via gateway IP or old IP
 TARGET=""
-for ip in 192.168.167.1 "${RESTORE_IP}"; do
+for ip in 192.0.2.1 "${RESTORE_IP}"; do
   if ssh -o BatchMode=yes -o ConnectTimeout=3 "root@${ip}" 'true' 2>/dev/null; then
     TARGET="$ip"
     break
@@ -32,7 +34,7 @@ set -euo pipefail
 CTID="$1"
 RESTORE_IP="$2"
 LAB_CIDR="$3"
-pct set "$CTID" -net0 "name=eth0,bridge=vmbr0,gw=192.168.167.1,ip=${RESTORE_IP}/24,type=veth"
+pct set "$CTID" -net0 "name=eth0,bridge=vmbr0,gw=192.0.2.1,ip=${RESTORE_IP}/24,type=veth"
 pct set "$CTID" -net1 "name=eth1,bridge=vmbr1,ip=${LAB_CIDR},type=veth"
 pct reboot "$CTID"
 PVE
@@ -46,7 +48,7 @@ sed -i 's/^CUTOVER=.*/CUTOVER=0/' /etc/array-firewall/array-firewall.conf
 sed -i 's|^LAN_IF=.*|LAN_IF=eth1|' /etc/array-firewall/array-firewall.conf
 sed -i 's|^WAN_IF=.*|WAN_IF=eth1|' /etc/array-firewall/array-firewall.conf
 sed -i 's|^UPLINK_IF=.*|UPLINK_IF=eth0|' /etc/array-firewall/array-firewall.conf
-sed -i 's|^LAN_CIDR=.*|LAN_CIDR=10.99.0.0/24|' /etc/array-firewall/array-firewall.conf
+sed -i 's|^LAN_CIDR=.*|LAN_CIDR=198.51.100.0/24|' /etc/array-firewall/array-firewall.conf
 
 python3 - <<'PY'
 import json
@@ -59,17 +61,17 @@ data.setdefault("network", {}).update({
     "lan_if": "eth1",
     "wan_if": "eth1",
     "uplink_if": "eth0",
-    "lan_cidr": "10.99.0.0/24",
+    "lan_cidr": "198.51.100.0/24",
 })
 dhcp = data.setdefault("dhcp", {})
 dhcp.update({
     "enabled": True,
     "interface": "eth1",
-    "range_start": "10.99.0.50",
-    "range_end": "10.99.0.200",
-    "gateway": "10.99.0.1",
-    "dns": "10.99.0.1",
-    "upstream_dns": ["192.168.167.1"],
+    "range_start": "198.51.100.50",
+    "range_end": "198.51.100.200",
+    "gateway": "198.51.100.1",
+    "dns": "198.51.100.1",
+    "upstream_dns": ["192.0.2.1"],
 })
 p.write_text(json.dumps(data, indent=2) + "\n")
 PY
@@ -91,7 +93,7 @@ fi
 apply-array-firewall
 
 if [[ -f /etc/default/warzone-lobby-sentinel ]]; then
-  sed -i 's|^WZ_FIREWALLA_API_URL=.*|WZ_FIREWALLA_API_URL=http://192.168.167.1:9378|' /etc/default/warzone-lobby-sentinel 2>/dev/null || true
+  sed -i 's|^WZ_FIREWALLA_API_URL=.*|WZ_FIREWALLA_API_URL=http://192.0.2.1:9378|' /etc/default/warzone-lobby-sentinel 2>/dev/null || true
   systemctl restart warzone-lobby-sentinel 2>/dev/null || true
 fi
 
@@ -100,6 +102,6 @@ hostname -I
 INNER
 
 log ""
-log "Rollback done. CT940 @ ${RESTORE_IP}"
-log "Re-enable Firewalla as 192.168.167.1 if needed."
+log "Rollback done. array-firewall CT @ ${RESTORE_IP}"
+log "Re-enable Firewalla as 192.0.2.1 if needed."
 log "Dashboard: http://${RESTORE_IP}:8090/"

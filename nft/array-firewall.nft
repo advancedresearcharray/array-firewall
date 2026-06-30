@@ -8,9 +8,9 @@ table inet filter {
 		type filter hook input priority filter; policy drop;
 		iif "lo" accept
 		ct state established,related accept
-		ip saddr 192.168.167.0/24 tcp dport { 22, 8098 } accept
-		ip saddr 192.168.167.0/24 icmp type echo-request accept
-		ip saddr 10.99.0.0/24 icmp type echo-request accept
+		ip saddr 192.0.2.0/24 tcp dport { 22, 8098 } accept
+		ip saddr 192.0.2.0/24 icmp type echo-request accept
+		ip saddr 198.51.100.0/24 icmp type echo-request accept
 	}
 
 	chain forward {

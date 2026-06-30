@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Copy BBR + cake kernel modules from Proxmox host into CT940 (bind-mount blocked on /lib symlink).
+# Copy BBR + cake kernel modules from Proxmox host into array-firewall CT (bind-mount blocked on /lib symlink).
 set -euo pipefail
 
-CTID="${ARRAY_FW_CTID:-940}"
-PROXMOX="${PROXMOX_NODE:-192.168.167.39}"
+: "${ARRAY_FW_CTID:?Set ARRAY_FW_CTID}"
+CTID="${ARRAY_FW_CTID}"
+PROXMOX="${PROXMOX_NODE:?Set PROXMOX_NODE}"
 
 ssh -o BatchMode=yes "root@${PROXMOX}" bash -s <<REMOTE
 set -euo pipefail

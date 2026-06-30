@@ -14,7 +14,7 @@ PERF_TUNE = Path("/opt/array-firewall/scripts/perf-tune.sh")
 BUFFER_STATE = Path("/var/lib/array-firewall/buffer-tune.state")
 DSCP_STATE = Path("/var/lib/array-firewall/dscp-gaming.state")
 PERF_STATE = Path("/var/lib/array-firewall/perf-tune.state")
-GPU_DEFAULT = "http://192.168.167.221:8795"
+GPU_DEFAULT = "http://192.0.2.221:8795"
 
 
 def _read_conf() -> dict[str, str]:

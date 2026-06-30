@@ -59,10 +59,10 @@ def preflight() -> dict[str, Any]:
         "ready": len(required_fail) == 0,
         "role": cfg.get("role"),
         "cutover": policies.cutover_enabled(),
-        "lan_gateway": net.get("gateway_ip", "192.168.167.1"),
+        "lan_gateway": net.get("gateway_ip", "192.0.2.1"),
         "checks": checks,
         "warnings": [
-            "Firewalla must be removed/disabled as 192.168.167.1 before cutover",
+            "Firewalla must be removed/disabled as 192.0.2.1 before cutover",
             "Physical: nic1 (eth1) → ISP/modem, nic0 (eth0) → house switch",
             "Expect brief LAN outage during reboot (~2 min)",
         ],
@@ -77,8 +77,8 @@ def backup_state() -> dict[str, Any]:
         "devices": json.loads(devices.STORE.read_text()) if devices.STORE.is_file() else {},
         "pct_hint": {
             "ctid": 940,
-            "net0": "192.168.167.241/24",
-            "net1": "10.99.0.1/24",
+            "net0": "192.0.2.241/24",
+            "net1": "198.51.100.1/24",
         },
     }
     BACKUP.parent.mkdir(parents=True, exist_ok=True)
@@ -92,7 +92,7 @@ def status() -> dict[str, Any]:
         "ok": True,
         "cutover": policies.cutover_enabled(),
         "role": policies.role(),
-        "gateway_ip": policies.network().get("gateway_ip", "192.168.167.1"),
+        "gateway_ip": policies.network().get("gateway_ip", "192.0.2.1"),
         "preflight": pf,
         "dhcp": {"effective": dhcp.status().get("effective"), "lease_count": dhcp.status().get("lease_count")},
         "backup_exists": BACKUP.is_file(),

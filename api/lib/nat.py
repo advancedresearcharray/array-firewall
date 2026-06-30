@@ -312,7 +312,7 @@ def enable_xbox_dmz() -> dict[str, Any]:
 
 
 def enable_xbox_wan_dmz() -> dict[str, Any]:
-    """Put Xbox in array-firewall WAN DMZ (eth1 -> 192.168.5.11) with outbound SNAT."""
+    """Put Xbox in array-firewall WAN DMZ (eth1 -> 203.0.113.11) with outbound SNAT."""
     result = enable_xbox_dmz()
     data = _load()
     gaming = data.setdefault("gaming", {})
@@ -380,7 +380,7 @@ def _write_upnp_conf() -> None:
     secure = "yes" if cfg.get("secure_mode") else "no"
     gaming = _gaming()
     xbox_ip = str(gaming.get("xbox_ip") or c.get("XBOX_IP") or "").strip()
-    allow_line = "allow 1024-65535 192.168.167.0/24 1024-65535"
+    allow_line = "allow 1024-65535 192.0.2.0/24 1024-65535"
     if cfg.get("xbox_only") and _IP_RE.match(xbox_ip):
         allow_line = f"allow 0-65535 {xbox_ip}/32 0-65535"
     elif cfg.get("secure_mode") and _IP_RE.match(xbox_ip):

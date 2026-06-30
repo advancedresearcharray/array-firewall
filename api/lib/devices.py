@@ -13,7 +13,7 @@ STORE = Path(os.environ.get("ARRAY_FW_DEVICES_FILE", "/var/lib/array-firewall/de
 CONF = Path("/etc/array-firewall/array-firewall.conf")
 LEASES = Path("/var/lib/misc/dnsmasq.leases")
 CLIENT_IF = os.environ.get("ARRAY_FW_CLIENT_IF", "eth1")
-LAB_CIDR = os.environ.get("ARRAY_FW_LAB_CIDR", "10.99.0.0/24")
+LAB_CIDR = os.environ.get("ARRAY_FW_LAB_CIDR", "198.51.100.0/24")
 
 MAC_RE = re.compile(r"^([0-9a-f]{2}:){5}[0-9a-f]{2}$", re.I)
 IPV4_RE = re.compile(r"^(\d{1,3}\.){3}\d{1,3}$")

@@ -8,7 +8,7 @@ ALLOW_CIDRS = tuple(
     c.strip()
     for c in os.environ.get(
         "ARRAY_FW_ALLOW_CIDRS",
-        "192.168.167.0/24,192.168.5.0/24,10.99.0.0/24,127.0.0.0/8",
+        "192.0.2.0/24,203.0.113.0/24,198.51.100.0/24,127.0.0.0/8",
     ).split(",")
     if c.strip()
 )

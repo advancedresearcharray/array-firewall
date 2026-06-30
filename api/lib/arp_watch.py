@@ -58,7 +58,7 @@ def status(*, tail: int = 40) -> dict[str, Any]:
         "xbox_mac": mac,
         "xbox_ip": g.get("xbox_ip") or "",
         "lan_if": lan_if,
-        "gateway_ip": net.get("gateway_ip") or "192.168.5.1",
+        "gateway_ip": net.get("gateway_ip") or "203.0.113.1",
         "last": last.get("last") or {},
         "updated": last.get("updated") or "",
         "neigh": neigh,

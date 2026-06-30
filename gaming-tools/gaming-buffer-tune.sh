@@ -11,7 +11,7 @@ POLICIES="${ARRAY_FW_POLICIES:-/var/lib/array-firewall/policies.json}"
 
 WAN="${WAN_IF:-eth1}"
 IFB="${IFB_DEV:-ifb0}"
-XBOX_IP="${XBOX_IP:-192.168.167.65}"
+XBOX_IP="${XBOX_IP:-192.0.2.65}"
 XBOX_CEIL="${XBOX_CEIL:-931mbit}"
 WAN_DOWN="${WAN_DOWN:-1000mbit}"
 STATE="/var/lib/array-firewall/buffer-tune.state"

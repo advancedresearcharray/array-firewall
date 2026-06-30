@@ -13,26 +13,26 @@ UPLINK_IF="${UPLINK_IF:-eth0}"
 XBOX_IF="${LAN_IF:-eth1}"
 MODEM_GW="${MODEM_GW:-192.168.1.254}"
 MODEM_IP="${MODEM_IP:-192.168.1.67}"
-UPSTREAM_GW="${UPSTREAM_GW:-192.168.167.1}"
-MGMT_IP="${MGMT_IP:-192.168.167.3}"
-XBOX_GW_IP="${LAN_GATEWAY_IP:-192.168.5.1}"
+UPSTREAM_GW="${UPSTREAM_GW:-192.0.2.1}"
+MGMT_IP="${MGMT_IP:-192.0.2.3}"
+XBOX_GW_IP="${LAN_GATEWAY_IP:-203.0.113.1}"
 
 read -r POLICY_UPSTREAM POLICY_MODE POLICY_ROLE POLICY_LAN POLICY_UPLINK POLICY_GW POLICY_MGMT <<<"$(python3 - <<'PY'
 import json
 from pathlib import Path
 p = Path("/var/lib/array-firewall/policies.json")
 if not p.is_file():
-    print("192.168.167.1 upstream xbox_router eth1 eth0 192.168.5.1 192.168.167.3")
+    print("192.0.2.1 upstream xbox_router eth1 eth0 203.0.113.1 192.0.2.3")
     raise SystemExit
 n = json.loads(p.read_text()).get("network", {})
 print(
-    n.get("upstream_gateway", "192.168.167.1"),
+    n.get("upstream_gateway", "192.0.2.1"),
     n.get("wan_mode", "auto"),
     n.get("role", ""),
     n.get("lan_if", "eth1"),
     n.get("uplink_if", n.get("wan_if", "eth0")),
-    n.get("gateway_ip", "192.168.5.1"),
-    n.get("mgmt_ip", "192.168.167.3"),
+    n.get("gateway_ip", "203.0.113.1"),
+    n.get("mgmt_ip", "192.0.2.3"),
 )
 PY
 )"
@@ -55,9 +55,9 @@ write_dhclient_conf() {
   mac="$(cat "/sys/class/net/${ifc}/address" | tr ':' ':')"
   cfg="/etc/dhcp/dhclient-${ifc}.conf"
   cat >"$cfg" <<EOF
-reject 192.168.167.0/24;
+reject 192.0.2.0/24;
 reject 192.168.28.0/24;
-reject 192.168.5.0/24;
+reject 203.0.113.0/24;
 send dhcp-client-identifier 1:${mac};
 EOF
 }
@@ -102,7 +102,7 @@ PY
 }
 
 use_xbox_router_eth0_xbox_eth1_wan() {
-  # eth0: house mgmt + 192.168.5.1 Xbox gateway; eth1: DHCP WAN (e.g. 192.168.39.x)
+  # eth0: house mgmt + 203.0.113.1 Xbox gateway; eth1: DHCP WAN (e.g. 198.18.0.x)
   stop_dhcp "$MGMT_IF"
   ip link set "$MGMT_IF" up
   ip addr flush dev "$MGMT_IF"

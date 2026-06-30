@@ -8,14 +8,14 @@ from . import devices, groups, policies
 
 DEFAULT_CFG: dict[str, Any] = {
     "enabled": True,
-    "google_router_ip": "192.168.167.2",
+    "google_router_ip": "192.0.2.2",
     "wireless": {
         "groups": ["google-mesh", "wireless-infra"],
-        "ip_ranges": ["192.168.167.3-192.168.167.50"],
+        "ip_ranges": ["192.0.2.3-192.0.2.50"],
     },
     "trusted": {
         "groups": ["infrastructure", "gaming", "laptops"],
-        "ip_ranges": ["192.168.167.51-192.168.167.250"],
+        "ip_ranges": ["192.0.2.51-192.0.2.250"],
     },
     "bridge": {
         "groups": ["bridge", "laptops"],
@@ -23,7 +23,7 @@ DEFAULT_CFG: dict[str, Any] = {
     },
     "restricted": {
         "groups": ["guest", "iot"],
-        "ip_ranges": ["192.168.167.201-192.168.167.250"],
+        "ip_ranges": ["192.0.2.201-192.0.2.250"],
     },
     "allow": {
         "gateway_dns": True,
@@ -215,7 +215,7 @@ def render_forward_zones(lan_if: str, gw_ip: str) -> tuple[str, str]:
     for zone_name in ("wireless", "trusted", "bridge", "restricted"):
         sets.setdefault(zone_name, [])
     blocks = "".join(nft_set_block(f"zone_{k}", v) for k, v in sets.items())
-    google = cfg.get("google_router_ip") or "192.168.167.2"
+    google = cfg.get("google_router_ip") or "192.0.2.2"
 
     allow_restricted_lateral = bool(cfg.get("allow", {}).get("restricted_lateral", False))
     restricted_rules = ""

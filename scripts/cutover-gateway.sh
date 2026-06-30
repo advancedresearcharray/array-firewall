@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Gateway cutover — array-firewall becomes 192.168.167.1 network exit.
+# Gateway cutover — array-firewall becomes 192.0.2.1 network exit.
 set -euo pipefail
 
-CTID="${ARRAY_FW_CTID:-940}"
-PROXMOX="${PROXMOX_NODE:-192.168.167.39}"
-LAN_GW="${LAN_GATEWAY_IP:-192.168.167.1}"
-OLD_IP="${ARRAY_FW_IP:-192.168.167.241}"
-LAB_IP="${ARRAY_FW_LAB_IP:-10.99.0.1/24}"
+: "${ARRAY_FW_CTID:?Set ARRAY_FW_CTID}"
+: "${PROXMOX_NODE:?Set PROXMOX_NODE}"
+CTID="${ARRAY_FW_CTID}"
+PROXMOX="${PROXMOX_NODE}"
+LAN_GW="${LAN_GATEWAY_IP:-192.0.2.1}"
+OLD_IP="${ARRAY_FW_IP:-192.0.2.241}"
+LAB_IP="${ARRAY_FW_LAB_IP:-198.51.100.1/24}"
 
 log() { printf '[cutover] %s\n' "$*"; }
 
@@ -15,8 +17,8 @@ echo "Target LAN gateway: ${LAN_GW}"
 echo "Proxmox: ${PROXMOX} CT${CTID}"
 echo ""
 echo "Physical wiring (two separate networks — do not cross-connect):"
-echo "  nic2 → ISP/modem     (CT940 eth1 / WAN — e.g. 192.168.1.x from modem)"
-echo "  nic0 → house switch  (CT940 eth0 / LAN — 192.168.167.0/24)"
+echo "  nic2 → ISP/modem     (array-firewall CT eth1 / WAN — e.g. 192.168.1.x from modem)"
+echo "  nic0 → house switch  (array-firewall CT eth0 / LAN — 192.0.2.0/24)"
 echo "  Firewalla must NOT remain gateway at ${LAN_GW}"
 echo ""
 
@@ -67,7 +69,7 @@ sed -i 's/^CUTOVER=.*/CUTOVER=1/' /etc/array-firewall/array-firewall.conf
 sed -i 's|^LAN_IF=.*|LAN_IF=eth0|' /etc/array-firewall/array-firewall.conf
 sed -i 's|^WAN_IF=.*|WAN_IF=eth1|' /etc/array-firewall/array-firewall.conf
 sed -i 's|^UPLINK_IF=.*|UPLINK_IF=eth1|' /etc/array-firewall/array-firewall.conf
-sed -i 's|^LAN_CIDR=.*|LAN_CIDR=192.168.167.0/24|' /etc/array-firewall/array-firewall.conf
+sed -i 's|^LAN_CIDR=.*|LAN_CIDR=192.0.2.0/24|' /etc/array-firewall/array-firewall.conf
 sed -i "s|^LAN_GATEWAY_IP=.*|LAN_GATEWAY_IP=${LAN_GW}|" /etc/array-firewall/array-firewall.conf
 
 python3 - <<'PY'
@@ -82,26 +84,26 @@ data.setdefault("network", {}).update({
     "lan_if": "eth0",
     "wan_if": "eth1",
     "uplink_if": "eth1",
-    "lan_cidr": "192.168.167.0/24",
-    "gateway_ip": "192.168.167.1",
+    "lan_cidr": "192.0.2.0/24",
+    "gateway_ip": "192.0.2.1",
 })
 dhcp = data.setdefault("dhcp", {})
 dhcp.update({
     "enabled": True,
     "interface": "eth0",
-    "range_start": "192.168.167.50",
-    "range_end": "192.168.167.200",
+    "range_start": "192.0.2.50",
+    "range_end": "192.0.2.200",
     "netmask": "255.255.255.0",
     "lease_time": "12h",
-    "gateway": "192.168.167.1",
-    "dns": "192.168.167.1",
+    "gateway": "192.0.2.1",
+    "dns": "192.0.2.1",
     "domain": "array.local",
     "upstream_dns": ["1.1.1.1", "8.8.8.8"],
     "authoritative": True,
 })
 # Xbox reservation
 res = dhcp.setdefault("reservations", [])
-xbox = {"mac": "28:ea:0b:75:3b:75", "ip": "192.168.167.65", "hostname": "xbox"}
+xbox = {"mac": "aa:bb:cc:dd:ee:ff", "ip": "192.0.2.65", "hostname": "xbox"}
 if not any(r.get("mac") == xbox["mac"] for r in res):
     res.append(xbox)
 p.write_text(json.dumps(data, indent=2) + "\n")
@@ -112,7 +114,7 @@ python3 - <<'PY'
 import sys
 sys.path.insert(0, "/opt/array-firewall/api")
 from lib import devices
-devices.set_allowed("28:ea:0b:75:3b:75", True, "Xbox SQUATX")
+devices.set_allowed("aa:bb:cc:dd:ee:ff", True, "Xbox SQUATX")
 PY
 
 /opt/array-firewall/scripts/wan-setup.sh || true

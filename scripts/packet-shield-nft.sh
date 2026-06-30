@@ -69,7 +69,7 @@ relax_honeypot_nat() {
 
 setup_honeypot_nat() {
   ensure_wan_nat_py
-  local gw="${LAN_GATEWAY_IP:-192.168.167.1}"
+  local gw="${LAN_GATEWAY_IP:-192.0.2.1}"
   local wan_if="${WAN_IF:-eth1}"
   local sink="127.0.0.1:${PROBE_SINK_PORT}"
   nft list table ip nat >/dev/null 2>&1 || nft add table ip nat

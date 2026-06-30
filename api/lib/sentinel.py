@@ -35,7 +35,7 @@ def base_url() -> str:
 
 def xbox_ip() -> str:
     conf = _read_conf()
-    return conf.get("XBOX_IP") or "192.168.167.65"
+    return conf.get("XBOX_IP") or "192.0.2.65"
 
 
 def sync_all(restart: bool = False) -> dict[str, Any]:
@@ -86,7 +86,7 @@ def sync_env_file(env_path: Path | None = None) -> None:
     if not env.is_file():
         return
     conf = _read_conf()
-    xip = conf.get("XBOX_IP", "192.168.167.65")
+    xip = conf.get("XBOX_IP", "192.0.2.65")
     api_port = conf.get("API_PORT", "8090")
     lines = env.read_text(encoding="utf-8").splitlines()
     updates = {

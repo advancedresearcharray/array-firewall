@@ -35,14 +35,14 @@ def is_google_mesh_mac(mac: str) -> bool:
 defaults = {
     "enabled": True,
     "interface": "eth1",
-    "range_start": "10.99.0.50",
-    "range_end": "10.99.0.200",
+    "range_start": "198.51.100.50",
+    "range_end": "198.51.100.200",
     "netmask": "255.255.255.0",
     "lease_time": "12h",
-    "gateway": "10.99.0.1",
-    "dns": "10.99.0.1",
+    "gateway": "198.51.100.1",
+    "dns": "198.51.100.1",
     "domain": "array-firewall.local",
-    "upstream_dns": ["192.168.167.1"],
+    "upstream_dns": ["192.0.2.1"],
     "authoritative": True,
     "reservations": [],
 }
@@ -62,7 +62,7 @@ gaming = data.get("gaming") or {}
 if role == "xbox_router":
     xbox_ip = (gaming.get("xbox_ip") or "").strip()
     xbox_mac = (gaming.get("xbox_mac") or "").strip().lower()
-    xbox_gw = net.get("gateway_ip") or "192.168.5.1"
+    xbox_gw = net.get("gateway_ip") or "203.0.113.1"
     if xbox_ip and xbox_mac:
         xbox_dns = "1.1.1.1"
         xbox_lines = [
@@ -87,8 +87,8 @@ if role == "xbox_router":
         sys.exit(0)
 
 if role == "gateway" and cutover:
-    gw = net.get("gateway_ip", dhcp.get("gateway", "192.168.167.1"))
-    cidr = net.get("lan_cidr", "192.168.167.0/24")
+    gw = net.get("gateway_ip", dhcp.get("gateway", "192.0.2.1"))
+    cidr = net.get("lan_cidr", "192.0.2.0/24")
     mask = cidr.split("/")[-1] if "/" in cidr else "24"
     parts = gw.split(".")
     if not dhcp.get("range_start"):
@@ -114,7 +114,7 @@ lines += [
     "bind-interfaces",
     f"except-interface={wan_if if role == 'gateway' and cutover else mgmt_if}",
     f"listen-address={dhcp['gateway']}",
-    f"# Trusted LAN DHCP only — wireless mesh uses Google router at 192.168.167.2 (.3-.50)",
+    f"# Trusted LAN DHCP only — wireless mesh uses Google router at 192.0.2.2 (.3-.50)",
     f"dhcp-range={dhcp['range_start']},{dhcp['range_end']},{dhcp['netmask']},{dhcp['lease_time']}",
     f"dhcp-option=3,{dhcp['gateway']}",
     f"dhcp-option=6,{dhcp['dns']}",

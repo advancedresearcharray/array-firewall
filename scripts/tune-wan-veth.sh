@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Host-side WAN veth tuning for CT940 line-rate (run on Proxmox host).
+# Host-side WAN veth tuning for array-firewall CT line-rate (run on Proxmox host).
 set -euo pipefail
 
-CTID="${1:-940}"
+CTID="${1:-${ARRAY_FW_CTID:?Set ARRAY_FW_CTID or pass CTID as arg}}"
 WAN_BRIDGE="${WAN_BRIDGE:-vmbr1}"
 HOST_NIC="${HOST_NIC:-nic2}"
 

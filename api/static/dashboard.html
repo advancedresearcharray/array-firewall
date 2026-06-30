@@ -990,7 +990,7 @@
         <div class="section-head">
           <div>
             <h2>DMZ &amp; inbound NAT</h2>
-            <p>Expose a host to the upstream router (full WAN passthrough). Xbox defaults to <span class="mono">192.168.167.65</span>.</p>
+            <p>Expose a host to the upstream router (full WAN passthrough). Xbox defaults to <span class="mono">192.0.2.65</span>.</p>
           </div>
           <div class="section-actions">
             <button class="primary" id="natXboxDmz">Xbox DMZ</button>
@@ -1001,7 +1001,7 @@
         </div>
         <div class="form-grid" style="margin-bottom:1rem">
           <label class="inline"><input type="checkbox" id="dmzEnabled" /> DMZ enabled</label>
-          <label>DMZ host IP<input type="text" id="dmzHostIp" placeholder="192.168.167.65" /></label>
+          <label>DMZ host IP<input type="text" id="dmzHostIp" placeholder="192.0.2.65" /></label>
           <label>Label<input type="text" id="dmzName" placeholder="xbox" /></label>
           <label style="justify-content:flex-end">
             <span style="visibility:hidden">.</span>
@@ -1038,7 +1038,7 @@
           <label>Name<input type="text" id="pfName" placeholder="minecraft" /></label>
           <label>Proto<select id="pfProto"><option value="tcp">tcp</option><option value="udp">udp</option><option value="both">both</option></select></label>
           <label>WAN port<input type="number" id="pfWan" min="1" max="65535" placeholder="25565" /></label>
-          <label>LAN IP<input type="text" id="pfLanIp" placeholder="192.168.167.65" /></label>
+          <label>LAN IP<input type="text" id="pfLanIp" placeholder="192.0.2.65" /></label>
           <label>LAN port<input type="number" id="pfLan" min="1" max="65535" placeholder="25565" /></label>
           <label style="justify-content:flex-end">
             <span style="visibility:hidden">.</span>
@@ -1075,7 +1075,7 @@
           <div class="stat"><label>Blocklist</label><div class="value" id="dnsBlocklistState">—</div></div>
         </div>
         <label>Custom domains (one per line)<textarea id="dnsCustom" rows="4" placeholder="ads.example.com&#10;tracker.example.net" style="width:100%;margin-top:.35rem;font-family:var(--mono);font-size:.85rem"></textarea></label>
-        <div class="hint-box" id="dnsHint">Clients must use gateway DNS (192.168.167.1). External UDP/TCP 53, DoT (853), and DoH resolvers are blocked at the firewall.</div>
+        <div class="hint-box" id="dnsHint">Clients must use gateway DNS (192.0.2.1). External UDP/TCP 53, DoT (853), and DoH resolvers are blocked at the firewall.</div>
       </section>
 
       <section class="section panel">
@@ -1116,12 +1116,12 @@
         <div class="form-grid" style="margin-bottom:1.25rem">
           <label class="inline"><input type="checkbox" id="dhcpEnabled" checked /> Enabled</label>
           <label>Interface<input type="text" id="dhcpIf" value="eth1" /></label>
-          <label>Range start<input type="text" id="dhcpStart" value="10.99.0.50" /></label>
-          <label>Range end<input type="text" id="dhcpEnd" value="10.99.0.200" /></label>
+          <label>Range start<input type="text" id="dhcpStart" value="198.51.100.50" /></label>
+          <label>Range end<input type="text" id="dhcpEnd" value="198.51.100.200" /></label>
           <label>Lease<input type="text" id="dhcpLease" value="12h" /></label>
-          <label>Gateway<input type="text" id="dhcpGw" value="10.99.0.1" /></label>
-          <label>DNS<input type="text" id="dhcpDns" value="10.99.0.1" /></label>
-          <label>Upstream<input type="text" id="dhcpUpstream" value="192.168.167.1" /></label>
+          <label>Gateway<input type="text" id="dhcpGw" value="198.51.100.1" /></label>
+          <label>DNS<input type="text" id="dhcpDns" value="198.51.100.1" /></label>
+          <label>Upstream<input type="text" id="dhcpUpstream" value="192.0.2.1" /></label>
           <label>Domain<input type="text" id="dhcpDomain" value="array-firewall.local" /></label>
         </div>
 
@@ -1136,7 +1136,7 @@
         <h3 class="sub" style="margin:0 0 .5rem;font-weight:600;color:var(--text)">Static reservations</h3>
         <div class="form-grid" style="margin-bottom:.75rem">
           <label>MAC<input type="text" id="resMac" placeholder="aa:bb:cc:dd:ee:ff" /></label>
-          <label>IP<input type="text" id="resIp" placeholder="10.99.0.65" /></label>
+          <label>IP<input type="text" id="resIp" placeholder="198.51.100.65" /></label>
           <label>Hostname<input type="text" id="resHost" placeholder="optional" /></label>
           <label style="justify-content:flex-end">
             <span style="visibility:hidden">.</span>
@@ -2314,12 +2314,12 @@
     function fillDhcpForm(cfg) {
       $('dhcpEnabled').checked = cfg.enabled !== false;
       $('dhcpIf').value = cfg.interface || 'eth1';
-      $('dhcpStart').value = cfg.range_start || '10.99.0.50';
-      $('dhcpEnd').value = cfg.range_end || '10.99.0.200';
+      $('dhcpStart').value = cfg.range_start || '198.51.100.50';
+      $('dhcpEnd').value = cfg.range_end || '198.51.100.200';
       $('dhcpLease').value = cfg.lease_time || '12h';
-      $('dhcpGw').value = cfg.gateway || '10.99.0.1';
-      $('dhcpDns').value = cfg.dns || '10.99.0.1';
-      $('dhcpUpstream').value = (cfg.upstream_dns || ['192.168.167.1']).join(', ');
+      $('dhcpGw').value = cfg.gateway || '198.51.100.1';
+      $('dhcpDns').value = cfg.dns || '198.51.100.1';
+      $('dhcpUpstream').value = (cfg.upstream_dns || ['192.0.2.1']).join(', ');
       $('dhcpDomain').value = cfg.domain || 'array-firewall.local';
     }
 
@@ -3020,7 +3020,7 @@
         } else if (aiRaw.error === 'inference_timeout') {
           $('idsAiSummary').textContent = aiRaw.detail || 'Ollama is reachable but inference timed out — GPU busy on .221 (gh-inbox fleet). NIST heuristics still logged.';
         } else if (aiRaw.reachable === false) {
-          $('idsAiSummary').textContent = aiRaw.error || 'Cannot reach IDS Ollama at node9 (.62:11434)';
+          $('idsAiSummary').textContent = aiRaw.error || 'Cannot reach IDS Ollama (check ids.ollama_url in policies)';
         } else {
           $('idsAiSummary').textContent = 'Run Scan now to analyze live flows with NIST rules + AI.';
         }
@@ -3170,7 +3170,7 @@
         const res = await fetch('/api/v1/firewall/status');
         const status = await res.json();
         if (!res.ok) {
-          if (res.status === 403) showConnectHint('Dashboard blocked from this network — connect from 192.168.167.x or 192.168.5.x');
+          if (res.status === 403) showConnectHint('Dashboard blocked from this network — connect from 192.0.2.x or 203.0.113.x');
           return;
         }
         applyFirewallStatus(status);

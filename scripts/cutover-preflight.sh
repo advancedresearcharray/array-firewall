@@ -2,8 +2,10 @@
 # Pre-cutover checks — no network changes.
 set -euo pipefail
 
-CTID="${ARRAY_FW_CTID:-940}"
-FW_IP="${ARRAY_FW_IP:-192.168.167.241}"
+: "${ARRAY_FW_CTID:?Set ARRAY_FW_CTID}"
+: "${PROXMOX_NODE:?Set PROXMOX_NODE}"
+CTID="${ARRAY_FW_CTID}"
+FW_IP="${ARRAY_FW_IP:?Set ARRAY_FW_IP}"
 TOKEN_FILE="${ARRAY_FW_TOKEN:-}"
 
 echo "=== array-firewall cutover preflight ==="
@@ -53,17 +55,17 @@ else
 fi
 
 # Proxmox access
-if ssh -o BatchMode=yes -o ConnectTimeout=5 root@192.168.167.39 "pct status ${CTID}" &>/dev/null; then
-  check "proxmox_ct" 1 "CT${CTID} on .39"
+if ssh -o BatchMode=yes -o ConnectTimeout=5 "root@${PROXMOX_NODE}" "pct status ${CTID}" &>/dev/null; then
+  check "proxmox_ct" 1 "CT${CTID} on ${PROXMOX_NODE}"
 else
-  check "proxmox_ct" 0 "cannot reach Proxmox .39 or CT${CTID}"
+  check "proxmox_ct" 0 "cannot reach ${PROXMOX_NODE} or CT${CTID}"
 fi
 
 # Firewalla still up (informational)
-if curl -s -m 3 http://192.168.167.1/ &>/dev/null || ping -c1 -W2 192.168.167.1 &>/dev/null; then
+if curl -s -m 3 http://192.0.2.1/ &>/dev/null || ping -c1 -W2 192.0.2.1 &>/dev/null; then
   echo "[INFO] Firewalla/current .1 is reachable — must be disabled before cutover"
 else
-  echo "[INFO] 192.168.167.1 not responding (may already be offline)"
+  echo "[INFO] 192.0.2.1 not responding (may already be offline)"
 fi
 
 echo ""

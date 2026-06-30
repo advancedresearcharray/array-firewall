@@ -6,7 +6,7 @@ CONF="/etc/array-firewall/array-firewall.conf"
 # shellcheck disable=SC1090
 [[ -f "$CONF" ]] && source "$CONF"
 
-XBOX_IP="${XBOX_IP:-192.168.167.65}"
+XBOX_IP="${XBOX_IP:-192.0.2.65}"
 WAN="${WAN_IF:-eth1}"
 TABLE="${ROUTE_TABLE_GAMING:-100}"
 STATE="/var/lib/array-firewall/gaming-route.state"

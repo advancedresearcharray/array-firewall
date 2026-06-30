@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Host-side tuning required for 900+ Mbps gateway download through CT940.
+# Host-side tuning required for 900+ Mbps gateway download through array-firewall CT.
 # Run on Proxmox host (not inside the container).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SYSCTL_FILE="/etc/sysctl.d/99-array-firewall-gw.conf"
-CTID="${1:-940}"
+CTID="${1:-${ARRAY_FW_CTID:?Set ARRAY_FW_CTID or pass CTID as arg}}"
 
 cat >"$SYSCTL_FILE" <<'EOF'
-# Line-rate gateway TCP buffers for array-firewall CT940.
+# Line-rate gateway TCP buffers for array-firewall array-firewall CT.
 net.core.rmem_max = 16777216
 net.core.wmem_max = 16777216
 net.core.rmem_default = 1048576

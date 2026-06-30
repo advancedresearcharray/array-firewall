@@ -92,7 +92,7 @@ def _cfg() -> dict[str, Any]:
         "mode": "log_only",
         "scan_interval_sec": 30,
         "ai_enabled": True,
-        "ollama_url": os.environ.get("IDS_OLLAMA_URL", "http://192.168.167.62:11434"),
+        "ollama_url": os.environ.get("IDS_OLLAMA_URL", "http://192.0.2.62:11434"),
         "ollama_model": os.environ.get("IDS_OLLAMA_MODEL", "llama3.2:1b"),
         "ollama_timeout_sec": 30,
         "connection_spike_threshold": 80,
@@ -181,7 +181,7 @@ def _parse_flows() -> list[dict[str, Any]]:
 
 
 def _is_lan(ip: str) -> bool:
-    return ip.startswith("192.168.167.") or ip.startswith("10.99.")
+    return ip.startswith("192.0.2.") or ip.startswith("198.51.100.")
 
 
 def _is_wan(ip: str) -> bool:

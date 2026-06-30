@@ -7,23 +7,23 @@
     "lan_if": "eth0",
     "wan_if": "eth1",
     "uplink_if": "eth1",
-    "lan_cidr": "192.168.167.0/24",
-    "mgmt_cidr": "192.168.167.0/24",
-    "gateway_ip": "192.168.167.3",
+    "lan_cidr": "192.0.2.0/24",
+    "mgmt_cidr": "192.0.2.0/24",
+    "gateway_ip": "192.0.2.3",
     "default_posture": "deny_new_devices",
     "unsolicited_wan": "deny",
     "nat": true
   },
   "zones": {
     "enabled": true,
-    "google_router_ip": "192.168.167.2",
+    "google_router_ip": "192.0.2.2",
     "wireless": {
       "groups": ["google-mesh", "wireless-infra"],
-      "ip_ranges": ["192.168.167.3-192.168.167.50"]
+      "ip_ranges": ["192.0.2.3-192.0.2.50"]
     },
     "trusted": {
       "groups": ["infrastructure", "gaming", "laptops"],
-      "ip_ranges": ["192.168.167.51-192.168.167.250"]
+      "ip_ranges": ["192.0.2.51-192.0.2.250"]
     },
     "bridge": {
       "groups": ["bridge", "laptops"],
@@ -38,7 +38,7 @@
     },
     "restricted": {
       "groups": ["guest", "iot"],
-      "ip_ranges": ["192.168.167.201-192.168.167.250"]
+      "ip_ranges": ["192.0.2.201-192.0.2.250"]
     }
   },
   "defaults": {
@@ -50,12 +50,12 @@
   "dhcp": {
     "enabled": true,
     "interface": "eth0",
-    "range_start": "10.99.0.50",
-    "range_end": "10.99.0.200",
+    "range_start": "198.51.100.50",
+    "range_end": "198.51.100.200",
     "netmask": "255.255.255.0",
     "lease_time": "12h",
-    "gateway": "192.168.167.3",
-    "dns": "192.168.167.3",
+    "gateway": "192.0.2.3",
+    "dns": "192.0.2.3",
     "domain": "array-firewall.local",
     "upstream_dns": ["1.1.1.1", "8.8.8.8"],
     "authoritative": true,
@@ -75,7 +75,7 @@
     "contract_up": "1000mbit",
     "contract_down": "1000mbit",
     "sync": true,
-    "xbox_ip": "192.168.167.65",
+    "xbox_ip": "203.0.113.11",
     "xbox_rate": "874mbit",
     "marks": {
       "xbox": 16,
@@ -212,7 +212,7 @@
     "mode": "log_only",
     "scan_interval_sec": 30,
     "ai_enabled": true,
-    "ollama_url": "http://192.168.167.62:11434",
+    "ollama_url": "http://192.0.2.60:11434",
     "ollama_model": "llama3.2:1b",
     "connection_spike_threshold": 80,
     "port_scan_threshold": 12,
@@ -223,8 +223,8 @@
   "port_forwards": [],
   "dmz": {
     "enabled": false,
-    "host_ip": "192.168.167.65",
-    "host_mac": "28:ea:0b:75:3b:75",
+    "host_ip": "203.0.113.11",
+    "host_mac": "aa:bb:cc:dd:ee:ff",
     "name": "xbox"
   },
   "upnp": {
@@ -248,8 +248,8 @@
     "nft": []
   },
   "gaming": {
-    "xbox_ip": "192.168.167.65",
-    "xbox_mac": "28:ea:0b:75:3b:75",
+    "xbox_ip": "203.0.113.11",
+    "xbox_mac": "aa:bb:cc:dd:ee:ff",
     "packet_shield_in_match_only": true,
     "sentinel_port": 8098,
     "mitigation": {
@@ -379,7 +379,7 @@
   "perf": {
     "enabled": true,
     "gpu_enabled": true,
-    "gpu_url": "http://192.168.167.221:8795",
+    "gpu_url": "http://192.0.2.50:8795",
     "dscp_gaming": true,
     "buffer_profiles": true,
     "kernel_tune": true,

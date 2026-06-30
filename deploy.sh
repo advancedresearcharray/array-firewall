@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
-# Deploy array-firewall + Warzone Lobby Sentinel to CT940 on Proxmox thirtynince (.39).
+# Deploy array-firewall + Warzone Lobby Sentinel to Proxmox LXC.
 #
+#   export PROXMOX_NODE=pve-primary.example
+#   export ARRAY_FW_CTID=100
+#   export ARRAY_FW_IP=192.0.2.10
 #   ./deploy.sh
-#   ARRAY_FW_CTID=940 PROXMOX_NODE=192.168.167.39 ./deploy.sh
 #
 set -euo pipefail
 
-CTID="${ARRAY_FW_CTID:-940}"
-PROXMOX="${PROXMOX_NODE:-192.168.167.39}"
+: "${ARRAY_FW_CTID:?Set ARRAY_FW_CTID}"
+: "${PROXMOX_NODE:?Set PROXMOX_NODE}"
+: "${ARRAY_FW_IP:?Set ARRAY_FW_IP}"
+CTID="${ARRAY_FW_CTID}"
+PROXMOX="${PROXMOX_NODE}"
 PROXMOX_REMOTE="root@${PROXMOX}"
-CT_IP="${ARRAY_FW_IP:-192.168.167.241}"
+CT_IP="${ARRAY_FW_IP}"
 MEM_MB="${ARRAY_FW_MEMORY:-2048}"
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -123,7 +128,7 @@ echo "  API:              http://${CT_IP}:${PORT}/api/v1/*"
 echo "  API token:        ssh root@${CT_IP} cat /etc/array-firewall/api.token"
 echo "  firewall status:  ssh root@${CT_IP} array-firewall-ctl status"
 echo "  sentinel dash:    http://${CT_IP}:8098/"
-echo "  lab NIC:          eth1 10.99.0.1/24 (vmbr1 → nic1)"
+echo "  lab NIC:          eth1 198.51.100.1/24 (vmbr1 → nic1)"
 echo ""
 echo "Set admin laptop MAC: ARRAY_FW_ADMIN_MAC=aa:bb:cc:dd:ee:ff ./deploy.sh"
 echo ""

@@ -1,8 +1,8 @@
-# array-firewall on Proxmox thirtynince (.39)
+# array-firewall on Proxmox
 
 Custom **network exit** firewall — Firewalla-class protection (default deny, NAT, device approval, unsolicited blocked) with **full customization** via dashboard + API.
 
-**Target:** replace Firewalla as the house gateway. **Now:** lab mode on nic1 for safe testing.
+**Target:** replace the legacy gateway as the house exit. **Now:** lab mode on a secondary NIC for safe testing.
 
 See **[docs/CUTOVER.md](docs/CUTOVER.md)** for the full gateway cutover procedure (preflight → wiring → cutover → verify → rollback).
 
@@ -12,22 +12,31 @@ FORCE_CUTOVER=1 ./scripts/cutover-gateway.sh   # go live
 ./scripts/cutover-rollback.sh         # undo
 ```
 
-## Host
+## Deployment reference
 
-| Item | Value |
-|------|--------|
-| Proxmox | **192.168.167.39** (thirtynince) |
-| CTID | **940** |
-| Management | **192.168.167.241** (eth0) |
-| Lab / clients | **10.99.0.1/24** (eth1 → vmbr1 → nic1) |
-| Dashboard | **http://192.168.167.241:8090/** |
-| Sentinel | **http://192.168.167.241:8098/** |
+Set these in your environment (or a local secrets file — **never commit site-specific values**):
+
+| Variable | Purpose |
+|----------|---------|
+| `PROXMOX_NODE` | Proxmox host (management reachability) |
+| `ARRAY_FW_CTID` | LXC ID for `array-firewall` |
+| `ARRAY_FW_IP` | Container management IP on LAN (`eth0`) |
+| `ARRAY_FW_LAB_CIDR` | Lab / bench client subnet on `eth1` (e.g. `198.51.100.1/24`) |
+
+| Item | Example (RFC 5737 documentation space) |
+|------|----------------------------------------|
+| Proxmox | `${PROXMOX_NODE}` |
+| Container | CT `${ARRAY_FW_CTID}` |
+| Management | `${ARRAY_FW_IP}` (`eth0`) |
+| Lab / clients | `${ARRAY_FW_LAB_CIDR}` (`eth1` → lab bridge) |
+| Dashboard | `http://${ARRAY_FW_IP}:8090/` |
+| Sentinel | `http://${ARRAY_FW_IP}:8098/` |
 
 ## Security model
 
 - **Forward + input:** drop by default; only established/related + explicit allows
 - **Internet (lab → uplink):** only MACs in allowlist (admin laptop pre-approved)
-- **NAT:** masquerade `10.99.0.0/24` → uplink (`eth0` / main LAN until WAN on nic1)
+- **NAT:** masquerade lab CIDR → uplink
 - **Unsolicited inbound:** denied on lab/WAN interface
 - **New devices:** discovered via DHCP/ARP, **denied** until allowed in dashboard
 
@@ -37,11 +46,15 @@ FORCE_CUTOVER=1 ./scripts/cutover-gateway.sh   # go live
 # Set your laptop MAC (recommended)
 echo 'ADMIN_LAPTOP_MAC=aa:bb:cc:dd:ee:ff' > /root/.secrets/array-firewall.env
 
-cd /root/deploy/array-firewall
+export PROXMOX_NODE=pve-primary.example
+export ARRAY_FW_CTID=100
+export ARRAY_FW_IP=192.0.2.10
+
+cd /path/to/array-firewall
 ./deploy.sh
 ```
 
-Token after deploy: `ssh root@192.168.167.241 cat /etc/array-firewall/api.token`
+Token after deploy: `ssh root@${ARRAY_FW_IP} cat /etc/array-firewall/api.token`
 
 ## API (Bearer token)
 
@@ -59,7 +72,7 @@ Token after deploy: `ssh root@192.168.167.241 cat /etc/array-firewall/api.token`
 
 ## Testing
 
-1. Plug a device into **nic1** — gets `10.99.0.x` via DHCP, no internet until allowed
+1. Plug a device into the **lab NIC** — gets a DHCP address on the lab subnet, no internet until allowed
 2. Open dashboard — allow device with one click
 3. Admin laptop MAC (from secrets) has internet from first boot
 

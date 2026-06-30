@@ -436,7 +436,7 @@ def _device_ips() -> list[dict[str, str]]:
 def _lan_prefixes() -> tuple[str, ...]:
     cfg = qos.config()
     lan = str(cfg.get("lan_if") or "eth0")
-    cidr = str(policies.network().get("lan_cidr") or policies.load().get("network", {}).get("lan_cidr") or "192.168.167.0/24")
+    cidr = str(policies.network().get("lan_cidr") or policies.load().get("network", {}).get("lan_cidr") or "192.0.2.0/24")
     if cidr.startswith("192.168."):
         parts = cidr.split("/")[0].rsplit(".", 1)[0]
         return (f"{parts}.",)

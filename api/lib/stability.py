@@ -441,7 +441,7 @@ def ensure_wired_lan_devices(*, apply: bool = True) -> dict[str, Any]:
             continue
         ip = (dev.get("ip") or (dev.get("dhcp") or {}).get("ip") or "").strip()
         wired = False
-        if ip.startswith("192.168.167.") and not zones._ip_in_ranges(
+        if ip.startswith("192.0.2.") and not zones._ip_in_ranges(
             ip, zones.config().get("wireless", {}).get("ip_ranges") or []
         ):
             wired = True
