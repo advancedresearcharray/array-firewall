@@ -271,11 +271,12 @@ def match_cockpit() -> dict[str, Any]:
     except Exception as exc:
         out["ai_ops"] = {"ok": False, "error": str(exc)}
     try:
-        from . import peer_rate_limits, mesh_reputation, adaptive_honeypot
+        from . import peer_rate_limits, mesh_reputation, adaptive_honeypot, gpu_flow
 
         out["peer_rate_limits"] = peer_rate_limits.status().get("analysis")
         out["mesh_reputation"] = mesh_reputation.status()
         out["adaptive_honeypot"] = adaptive_honeypot.status().get("state")
+        out["gpu_flow"] = gpu_flow.status()
     except Exception:
         pass
     return out

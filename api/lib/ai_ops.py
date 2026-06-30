@@ -336,15 +336,30 @@ def _fuse_context(*, sentinel_payload: dict[str, Any] | None = None) -> dict[str
                         bump(ip, bump_amt, "gpu_flood_proxy")
 
     try:
-        from . import perf
+        from . import perf, gpu_flow
 
-        recs = (metrics or {}).get("recent_packets") or []
-        if perf.gpu_enabled() and isinstance(recs, list) and recs:
-            gpu = perf.analyze_packets_gpu(recs[:256])
-            ctx["gpu"] = {**(ctx.get("gpu") or {}), **gpu}
-            flood = float(gpu.get("flood_score") or 0)
-            if flood >= 35:
-                ctx["signals"].append(f"gpu_flood:{flood}")
+        peer_rows_gpu = _extract_peer_rows(payload)
+        if len(peer_rows_gpu) >= 2:
+            gpu = gpu_flow.analyze_payload(payload, phase=str(payload.get("phase") or ""))
+            if not gpu.get("skipped"):
+                ctx["gpu"] = {**(ctx.get("gpu") or {}), **gpu}
+                flood = float(gpu.get("flood_score") or 0)
+                flow = float(gpu.get("flow_score") or 0)
+                if flood >= 35 or flow >= 0.55:
+                    ctx["signals"].append(f"gpu_flow:{flood}")
+                bump_amt = float(weights.get("gpu_flood", 0.20))
+                for ip in (gpu.get("strict_ips") or [])[:8]:
+                    bump(ip, bump_amt, "gpu_flow_strict")
+                for ip in (gpu.get("throttle_ips") or [])[:8]:
+                    bump(ip, bump_amt * 0.5, "gpu_flow_throttle")
+        else:
+            recs = (metrics or {}).get("recent_packets") or []
+            if perf.gpu_enabled() and isinstance(recs, list) and recs:
+                gpu = perf.analyze_packets_gpu(recs[:256])
+                ctx["gpu"] = {**(ctx.get("gpu") or {}), **gpu}
+                flood = float(gpu.get("flood_score") or 0)
+                if flood >= 35:
+                    ctx["signals"].append(f"gpu_flood:{flood}")
     except Exception:
         pass
 
@@ -921,6 +936,7 @@ def tick(
         "verdict": context.get("fused_game_verdict"),
         "game_state": context.get("game_state"),
     }
+    state["last_gpu_flow"] = context.get("gpu")
     state["last_tick_id"] = tick_id
 
     fleet_result = None
@@ -1092,6 +1108,7 @@ def status() -> dict[str, Any]:
         "adaptive_posture": state.get("last_adaptive_posture"),
         "pre_burst_forecast": state.get("last_pre_burst_forecast"),
         "game_fusion": state.get("last_game_fusion"),
+        "gpu_flow": state.get("last_gpu_flow"),
         "mesh_reputation": mesh_reputation.status(),
         "learning": ai_learning.status(),
         "reputation": reputation_graph.status(),

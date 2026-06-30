@@ -399,6 +399,8 @@
       const play = ai.playability || {};
       const pbf = ai.pre_burst_forecast || {};
       const mesh = r.mesh_reputation || {};
+      const gf = r.gpu_flow || {};
+      const gfLast = gf.last || {};
       setText('goCkPhase', s.phase || '—');
       setText('goCkVerdict', (s.cheater_label || '—').toString());
       setHtml('goCkAiOps', ai.mode ? badge(ai.mode === 'enforce' ? 'warn' : 'ok', ai.mode) : '—');
@@ -406,6 +408,11 @@
         ? badge(play.posture === 'stay_and_mitigate' ? 'ok' : 'warn', 'stay & mitigate')
         : '—');
       setText('goCkPreBurst', pbf.forecast_score != null ? `${pbf.forecast_score} (${pbf.band || '?'})` : '—');
+      if ($('goCkGpuFlow')) {
+        const flood = gfLast.flood_score;
+        const strict = (gfLast.strict_ips || []).length;
+        setText('goCkGpuFlow', flood != null ? `${flood} / ${strict} strict` : (gf.gpu && gf.gpu.reachable ? 'idle' : '—'));
+      }
       setText('goCkMesh', mesh.clique_count != null ? String(mesh.clique_count) : '0');
       setText('goCkHeadline', play.headline || pbf.headline || 'Monitoring — mitigation active while you stay in lobby.');
       const peers = ((s.peer_tracker || {}).peers || []).slice(0, 16);

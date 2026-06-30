@@ -421,6 +421,23 @@ def mitigate(payload: dict[str, Any]) -> dict[str, Any]:
         level = _shield_level(payload, signals, kick_spike=kick_spike)
         shield_peers = list(peer_ips)
         peer_rows = _extract_peer_rows(payload)
+        gpu_strict: list[str] = []
+        gpu_throttle: list[str] = []
+        if peer_rows and phase in {"matchmaking", "in-match"}:
+            try:
+                from . import gpu_flow
+
+                gf = gpu_flow.analyze_payload(payload, phase=phase)
+                result["gpu_flow"] = gf
+                if not gf.get("skipped"):
+                    gpu_strict, gpu_throttle = gpu_flow.shield_peer_hints(gf)
+                    shield_peers = list(dict.fromkeys([*shield_peers, *gpu_strict]))
+                    if gpu_strict:
+                        result["actions"].append(f"gpu_flow_strict:{len(gpu_strict)}")
+                    if gpu_throttle:
+                        result["actions"].append(f"gpu_flow_throttle:{len(gpu_throttle)}")
+            except Exception as exc:
+                result["gpu_flow"] = {"ok": False, "error": str(exc)}
         mit_cfg = policies.gaming().get("mitigation") or {}
         if peer_rows and mit_cfg.get("peer_rate_limits_enabled", True):
             try:

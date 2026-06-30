@@ -559,6 +559,11 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/v1/perf/gpu":
             json_response(self, 200, {"ok": True, **perf.gpu_status()})
             return
+        if path == "/api/v1/perf/gpu-flow":
+            from lib import gpu_flow
+
+            json_response(self, 200, gpu_flow.status())
+            return
         if path == "/api/v1/groups":
             json_response(self, 200, {"ok": True, "groups": groups.list_groups()})
             return

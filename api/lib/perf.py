@@ -117,6 +117,146 @@ def gpu_status() -> dict[str, Any]:
     return probe
 
 
+def _gpu_post(path: str, body: dict[str, Any], *, timeout: float = 8.0) -> dict[str, Any]:
+    url = f"{gpu_url()}{path}"
+    payload = json.dumps(body, separators=(",", ":")).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        method="POST",
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+        data["backend"] = "gpu"
+        data["url"] = gpu_url()
+        return data
+
+
+def _peer_features(peer: dict[str, Any]) -> dict[str, Any]:
+    ip = str(peer.get("ip") or peer.get("remote") or "").split(":")[0].strip()
+    identical = int(peer.get("identical_count") or peer.get("max_burst") or 0)
+    tiny = int(peer.get("tiny_packets") or 0)
+    total = int(peer.get("total_packets") or peer.get("packets") or 0)
+    mn = peer.get("packet_size_min") or peer.get("identical_size")
+    mx = peer.get("packet_size_max") or peer.get("identical_size")
+    spread = None
+    if mn is not None and mx is not None:
+        try:
+            spread = float(mx) - float(mn)
+        except (TypeError, ValueError):
+            spread = None
+    sizes = peer.get("sizes") or peer.get("packet_sizes") or []
+    if spread is None and isinstance(sizes, list) and len(sizes) >= 2:
+        try:
+            nums = [float(s) for s in sizes]
+            spread = max(nums) - min(nums)
+        except (TypeError, ValueError):
+            spread = None
+    return {
+        "ip": ip,
+        "identical_count": identical,
+        "tiny_packets": tiny,
+        "total_packets": total,
+        "vps_probe": bool(peer.get("vps_probe")),
+        "size_spread": spread,
+        "identical_size": int(peer.get("identical_size") or 0),
+    }
+
+
+def analyze_peers_cpu(
+    peers: list[dict[str, Any]],
+    *,
+    phase: str = "",
+    metrics: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Score peer probe signatures locally when GPU host is unreachable."""
+    rows: list[dict[str, Any]] = []
+    strict: list[str] = []
+    throttle: list[str] = []
+    forming = 0
+    low_spread = 0
+    for peer in peers:
+        f = _peer_features(peer)
+        ip = f["ip"]
+        if not ip or ip.startswith(("10.", "192.168.", "127.")):
+            continue
+        identical = f["identical_count"]
+        spread = f["size_spread"]
+        score = 0.0
+        if f["vps_probe"]:
+            score += 0.45
+        if identical >= 20:
+            score += 0.35
+        elif identical >= 8:
+            score += 0.2
+        elif 6 <= identical <= 19:
+            forming += 1
+            score += 0.12
+        if spread is not None and spread <= 4.0:
+            low_spread += 1
+            score += 0.22
+        if f["total_packets"] and f["tiny_packets"] / max(f["total_packets"], 1) >= 0.5:
+            score += 0.15
+        score = round(min(1.0, score), 3)
+        entry = {"ip": ip, "score": score, "identical": identical, "size_spread": spread, "vps_probe": f["vps_probe"]}
+        rows.append(entry)
+        if score >= 0.65 or (f["vps_probe"] and identical >= 10):
+            strict.append(ip)
+        elif score >= 0.38:
+            throttle.append(ip)
+
+    metrics = metrics or {}
+    tiny_in = int(metrics.get("tiny_inbound") or metrics.get("tiny_packets") or 0)
+    inbound = int(metrics.get("inbound") or metrics.get("inbound_packets") or 0)
+    flood = min(
+        100.0,
+        len(strict) * 8.0 + len(throttle) * 3.0 + forming * 4.0 + (tiny_in / max(inbound, 1)) * 40.0,
+    )
+    return {
+        "ok": True,
+        "backend": "cpu",
+        "phase": phase,
+        "peer_count": len(rows),
+        "forming_peers": forming,
+        "low_spread_peers": low_spread,
+        "flood_score": round(flood, 2),
+        "flow_score": round(min(1.0, flood / 100.0), 3),
+        "anomaly": flood >= 35,
+        "strict_ips": strict[:24],
+        "throttle_ips": throttle[:32],
+        "strict_peers": [r for r in rows if r["ip"] in strict[:24]],
+        "throttle_peers": [r for r in rows if r["ip"] in throttle[:32]],
+        "peers": rows[:48],
+        "source": "peer_vectors",
+    }
+
+
+def analyze_peers_gpu(
+    peers: list[dict[str, Any]],
+    *,
+    phase: str = "",
+    metrics: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Offload peer-vector probe scoring to fleet GPU host."""
+    vectors = [_peer_features(p) for p in peers]
+    vectors = [v for v in vectors if v.get("ip") and not str(v["ip"]).startswith(("10.", "192.168.", "127."))]
+    if len(vectors) < 2:
+        return {"ok": True, "skipped": True, "reason": "insufficient_peers"}
+    if not gpu_enabled():
+        return analyze_peers_cpu(peers, phase=phase, metrics=metrics)
+
+    body = {"peers": vectors[:128], "phase": phase, "metrics": metrics or {}}
+    try:
+        data = _gpu_post("/v1/analyze-peers", body, timeout=8.0)
+        data["source"] = "peer_vectors"
+        return data
+    except Exception as exc:  # noqa: BLE001
+        local = analyze_peers_cpu(peers, phase=phase, metrics=metrics)
+        local["gpu_fallback"] = str(exc)
+        return local
+
+
 def analyze_packets_gpu(records: list[dict[str, Any]]) -> dict[str, Any]:
     """Offload batch packet fingerprint analysis to fleet GPU host (.221)."""
     if not records:
@@ -129,25 +269,15 @@ def analyze_packets_gpu(records: list[dict[str, Any]]) -> dict[str, Any]:
     body_obj = {"packets": records[:512]}
     body_text = json.dumps(body_obj, separators=(",", ":"))
     wire = folding_mod.wire_compress(body_text.encode("utf-8"))
-    body = json.dumps({"wire": wire, "packets": records[:512]}).encode("utf-8")
-    url = f"{gpu_url()}/v1/analyze"
-    req = urllib.request.Request(
-        url,
-        data=body,
-        method="POST",
-        headers={"Content-Type": "application/json", "Accept": "application/json"},
-    )
+    body = {"wire": wire, "packets": records[:512]}
     try:
-        with urllib.request.urlopen(req, timeout=8.0) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            data["backend"] = "gpu"
-            data["url"] = gpu_url()
-            data["wire_compression"] = {
-                "ratio": wire.get("ratio"),
-                "orig_size": wire.get("orig_size"),
-                "compressed_size": wire.get("compressed_size"),
-            }
-            return data
+        data = _gpu_post("/v1/analyze", body, timeout=8.0)
+        data["wire_compression"] = {
+            "ratio": wire.get("ratio"),
+            "orig_size": wire.get("orig_size"),
+            "compressed_size": wire.get("compressed_size"),
+        }
+        return data
     except Exception as exc:  # noqa: BLE001
         local = analyze_packets_cpu(records)
         local["gpu_fallback"] = str(exc)
