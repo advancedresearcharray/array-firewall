@@ -1,9 +1,9 @@
 [Unit]
-Description=AI Autopilot fusion cycle every 30 seconds
+Description=AI Autopilot fusion cycle every 5 seconds
 
 [Timer]
-OnBootSec=45s
-OnUnitActiveSec=30s
+OnBootSec=15s
+OnUnitActiveSec=5s
 Persistent=true
 
 [Install]

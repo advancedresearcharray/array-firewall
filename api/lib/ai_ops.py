@@ -29,7 +29,7 @@ def _cfg() -> dict[str, Any]:
     base = {
         "enabled": True,
         "mode": "assist",
-        "tick_interval_sec": 30,
+        "tick_interval_sec": 5,
         "ollama_planner": True,
         "ollama_url": "",
         "ollama_model": "",

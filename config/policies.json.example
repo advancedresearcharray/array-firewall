@@ -390,7 +390,7 @@
   "ai_ops": {
     "enabled": true,
     "mode": "assist",
-    "tick_interval_sec": 30,
+    "tick_interval_sec": 5,
     "ollama_planner": true,
     "auto_ids_scan": true,
     "auto_buffer_on_spike": true,
