@@ -186,6 +186,22 @@ def render_wan_nat_fragment() -> str:
     return f"#!/usr/sbin/nft -f\n{nat_table}\n"
 
 
+def _gaming_table_stub(*, xbox_router: bool, xbox_rule: str) -> str:
+    """Minimal gaming table for gateway mode; xbox_router uses packet-shield-nft.sh instead."""
+    if xbox_router:
+        return ""
+    return f"""
+table {GAMING_TABLE} {{
+  chain xbox_shield {{
+    type filter hook forward priority filter - 10; policy accept;{xbox_rule}
+  }}
+
+  chain xbox_in {{
+    ct state established,related accept
+  }}
+}}"""
+
+
 def render_ruleset(*, flowtable: bool = True) -> str:
     c = _conf()
     ifaces = _ifaces()
@@ -405,17 +421,7 @@ table inet filter {{{flow_block}{mac_block}{zone_block}{dns_block}{ids_block}{go
 {ids_forward}{dns_forward}{google_dhcp_forward}    iifname "{lan_if}" oifname "{wan_if}" jump lan_out
 {zone_forward}{mgmt_forward}{wan_return}    drop
   }}{lan_out_chain}
-}}
-table {GAMING_TABLE} {{
-  chain xbox_shield {{
-    type filter hook forward priority filter - 10; policy accept;{xbox_rule}
-  }}
-
-  chain xbox_in {{
-    ct state established,related accept
-  }}
-}}
-"""
+}}{_gaming_table_stub(xbox_router=xbox_router, xbox_rule=xbox_rule)}"""
 
 
 def apply_ruleset() -> dict[str, Any]:

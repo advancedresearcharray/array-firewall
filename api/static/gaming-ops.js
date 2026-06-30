@@ -702,10 +702,18 @@
         cur.gaming.mitigation = cur.gaming.mitigation || {};
         cur.gaming.mitigation.auto_block_peers = $('goAutoBlockPeers').checked;
         cur.gaming.mitigation.honeypot_enabled = $('goHoneypot').checked;
-        await api('/api/v1/policies', { method: 'POST', body: JSON.stringify(cur) });
-        toast('Gaming policies saved');
+        const saved = await api('/api/v1/policies', { method: 'POST', body: JSON.stringify(cur) });
+        if ((saved.warnings || []).length) {
+          toast('Saved (nft reload warning — gaming settings still saved)');
+        } else {
+          toast('Gaming policies saved');
+        }
         await refreshPoliciesForm();
-      } catch (e) { showError(e.message); }
+      } catch (e) {
+        showError(e.message === 'Failed to fetch'
+          ? 'Save failed — API connection dropped (check token and that array-firewall-api is running)'
+          : e.message);
+      }
     });
     on('goPolicySaveJson', async () => {
       try {

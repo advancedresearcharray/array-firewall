@@ -1141,9 +1141,21 @@ class Handler(BaseHTTPRequestHandler):
                     if "defaults" in body:
                         data.setdefault("defaults", {}).update(body["defaults"])
                 policies.save(data)
-                nft.apply_ruleset()
-                subprocess.run(["/opt/array-firewall/scripts/setup-dnsmasq.sh"], check=False, timeout=30)
-            json_response(self, 200, {"ok": True, "policies": policies.load()})
+                reload_warnings: list[str] = []
+                try:
+                    nft.apply_ruleset()
+                except Exception as exc:
+                    reload_warnings.append(f"nft: {exc}")
+                try:
+                    subprocess.run(["/opt/array-firewall/scripts/setup-dnsmasq.sh"], check=False, timeout=30)
+                except Exception as exc:
+                    reload_warnings.append(f"dnsmasq: {exc}")
+                resp = {"ok": True, "policies": policies.load()}
+                if reload_warnings:
+                    resp["warnings"] = reload_warnings
+                json_response(self, 200, resp)
+                return
+            json_response(self, 200, {"ok": True, "policies": data})
             return
 
         if path == "/api/v1/cutover/prepare":
